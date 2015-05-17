@@ -602,9 +602,9 @@ namespace backgroundField
         value_list[i](0) = p(0)*p(0);
         value_list[i](1) = p(1)*p(1);
         value_list[i](2) = p(2)*p(2);
-        value_list[i](3) = 0.0;//p(0)*p(0);
-        value_list[i](4) = 0.0;//p(1)*p(1);
-        value_list[i](5) = 0.0;//p(2)*p(2);
+        value_list[i](3) = p(0)*p(0);
+        value_list[i](4) = p(1)*p(1);
+        value_list[i](5) = p(2)*p(2);
       }
   }
   template <int dim>
