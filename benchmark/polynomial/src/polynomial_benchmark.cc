@@ -16,6 +16,8 @@
 #include <myvectortools.h>
 #include <outputtools.h>
 
+#include <myfe_nedelec.h>
+
 using namespace dealii;
 
 namespace polynomialBenchmark
@@ -44,7 +46,7 @@ namespace polynomialBenchmark
   polynomialBenchmark<dim>::polynomialBenchmark(const unsigned int order)
   :
   tria (Triangulation<3>::MeshSmoothing::none, true),
-  fe (FE_Nedelec<dim>(order), 2),
+  fe (MyFE_Nedelec<dim>(order), 2),
   dof_handler (tria),
   p_order(order)
   {
@@ -160,7 +162,6 @@ namespace polynomialBenchmark
         tria.refine_global(1);
       }
     }
-//     return;
     process_mesh(true);
     
     // Set boundary condition. This also doubles as the RHS function (J = A).
