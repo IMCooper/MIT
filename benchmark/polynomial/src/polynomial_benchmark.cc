@@ -85,7 +85,7 @@ namespace polynomialBenchmark
     // Can also perform mesh refinement here.
     // Also need to add material_ids.
     
-    typename Triangulation<dim>::active_cell_iterator
+    typename Triangulation<dim>::cell_iterator
     cell = tria.begin (),
     endc = tria.end ();
     
@@ -105,7 +105,7 @@ namespace polynomialBenchmark
         {
           if (cell->face(face)->at_boundary())
           {
-            cell->face(face)->set_all_boundary_indicators (10);
+            cell->face(face)->set_all_boundary_ids (10);
           }
         }
       }
@@ -149,7 +149,8 @@ namespace polynomialBenchmark
         GridGenerator::cylinder (tria, MeshData::radius, MeshData::height);
         static const CylinderBoundary<dim> cyl_boundary (MeshData::radius);
         tria.set_boundary (0, cyl_boundary);
-        tria.refine_global(1);
+//         tria.refine_global(1);
+        GridTools::distort_random (0.2, tria, true);
       }
       else if (MeshData::boundary_shape == "sphere")
       {
@@ -159,7 +160,7 @@ namespace polynomialBenchmark
         tria.refine_global(1);
       }
     }
-    return;
+//     return;
     process_mesh(true);
     
     // Set boundary condition. This also doubles as the RHS function (J = A).
