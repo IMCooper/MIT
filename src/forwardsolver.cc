@@ -116,7 +116,7 @@ namespace ForwardSolver
       
       //Full 4 by 4 block:
       /*
-       *   BlockCompressedSimpleSparsityPattern csp (4,4);
+       *   BlockDynamicSparsityPattern csp (4,4);
        *   
        *   csp.block(0,0).reinit (n_lowest_order_dofs, n_lowest_order_dofs);
        *   csp.block(0,1).reinit (n_lowest_order_dofs, n_higher_order_edge_dofs);
