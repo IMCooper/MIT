@@ -16,6 +16,8 @@
 #include <myvectortools.h>
 #include <outputtools.h>
 
+#include <myfe_nedelec.h>
+
 using namespace dealii;
 
 namespace wavepropBenchmark
@@ -43,7 +45,7 @@ namespace wavepropBenchmark
   template <int dim>
   wavepropBenchmark<dim>::wavepropBenchmark(const unsigned int order)
   :
-  fe (FE_Nedelec<dim>(order), 2),
+  fe (MyFE_Nedelec<dim>(order), 2),
   dof_handler (tria),
   p_order(order)
   {
@@ -107,7 +109,7 @@ namespace wavepropBenchmark
         {
           if (cell->face(face)->at_boundary())
           {
-            cell->face(face)->set_boundary_indicator (10);
+            cell->face(face)->set_boundary_id (10);
           }
         }
       }
@@ -137,15 +139,15 @@ namespace wavepropBenchmark
     param.read_and_copy_parameters(input_filename);
     
 
-    /*
+    
     InputTools::read_in_mesh<dim>(IO_Data::mesh_filename,
                                   tria);
-                                  */
+                                  
 
     
-    GridGenerator::hyper_cube (tria, -0.0125, 0.0125);
-    tria.refine_global (2);
-    GridTools::distort_random (0.2, tria, false);
+//     GridGenerator::hyper_cube (tria, -0.0125, 0.0125);
+//     tria.refine_global (2);
+//     GridTools::distort_random (0.2, tria, false);
     
     process_mesh(false);
     
