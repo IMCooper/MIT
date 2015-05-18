@@ -94,7 +94,7 @@ namespace ForwardSolver
 
     if (p_order == 0)
     {
-      BlockCompressedSimpleSparsityPattern csp (1,1);
+      BlockDynamicSparsityPattern csp (1,1);
       csp.block(0,0).reinit (n_lowest_order_dofs, n_lowest_order_dofs);
       csp.collect_sizes();
       
@@ -105,7 +105,7 @@ namespace ForwardSolver
     else
     {
       // 2 by 2 block:
-      BlockCompressedSimpleSparsityPattern csp (2,2);
+      BlockDynamicSparsityPattern csp (2,2);
       
       csp.block(0,0).reinit (n_lowest_order_dofs, n_lowest_order_dofs);
       csp.block(0,1).reinit (n_lowest_order_dofs, n_higher_order_dofs);
