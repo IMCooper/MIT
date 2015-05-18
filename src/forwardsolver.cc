@@ -76,22 +76,19 @@ namespace ForwardSolver
     // FE_Nedelec boundary constraints: note we just a zero function as we have not passed the actual function yet.
     // TODO: verify that this does not change anything !!
     // Real part (begins at 0):
-    for (unsigned int i=0; i<1; ++i)
-    {
-      VectorTools::project_boundary_values_curl_conforming_l2 (dof_handler,
-                                                               0,
-//                                                                boundary_function,
-                                                               ZeroFunction<dim> (dim+dim),
-                                                               i,
-                                                               constraints);
-      // Imaginary part (begins at dim):
-      VectorTools::project_boundary_values_curl_conforming_l2 (dof_handler,
-                                                               dim,
-//                                                                boundary_function,
-                                                               ZeroFunction<dim> (dim+dim),
-                                                               i,
-                                                               constraints);
-    }
+    VectorTools::project_boundary_values_curl_conforming_l2 (dof_handler,
+                                                             0,
+                                                             //                                                                boundary_function,
+                                                             ZeroFunction<dim> (dim+dim),
+                                                             0,
+                                                             constraints);
+    // Imaginary part (begins at dim):
+    VectorTools::project_boundary_values_curl_conforming_l2 (dof_handler,
+                                                             dim,
+                                                             //                                                                boundary_function,
+                                                             ZeroFunction<dim> (dim+dim),
+                                                             0,
+                                                             constraints);
     
     constraints.close ();
 
@@ -236,20 +233,17 @@ namespace ForwardSolver
     
     // FE_Nedelec boundary condition:
     // Real part (begins at 0):
-    for (unsigned int i=0; i<1; ++i)
-    {
-      VectorTools::project_boundary_values_curl_conforming_l2 (dof_handler,
-                                                               0,
-                                                               boundary_function,
-                                                               i,
-                                                               constraints);     
-      // Imaginary part (begins at dim):
-      VectorTools::project_boundary_values_curl_conforming_l2 (dof_handler,
-                                                               dim,
-                                                               boundary_function,
-                                                               i,
-                                                               constraints);
-    }
+    VectorTools::project_boundary_values_curl_conforming_l2 (dof_handler,
+                                                             0,
+                                                             boundary_function,
+                                                             0,
+                                                             constraints);
+    // Imaginary part (begins at dim):
+    VectorTools::project_boundary_values_curl_conforming_l2 (dof_handler,
+                                                             dim,
+                                                             boundary_function,
+                                                             0,
+                                                             constraints);
     constraints.close ();
     
   }
@@ -462,7 +456,7 @@ namespace ForwardSolver
         
         if (cell->face(face_number)->at_boundary()
           &&
-          (cell->face(face_number)->boundary_indicator() == 10))
+          (cell->face(face_number)->boundary_id() == 10))
         {
           // Store values of (mur^-1)*curl E:
           // For this problem, vector value list returns values of H
@@ -646,7 +640,7 @@ namespace ForwardSolver
         
         if (cell->face(face_number)->at_boundary()
           &&
-          (cell->face(face_number)->boundary_indicator() == 10))
+          (cell->face(face_number)->boundary_id() == 10))
         {
           // Store values of (mur^-1)*curl E:
           // For this problem, vector value list returns values of H
