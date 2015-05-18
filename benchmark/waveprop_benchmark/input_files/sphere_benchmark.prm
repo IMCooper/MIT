@@ -47,7 +47,7 @@ end
 
 subsection Mesh Data
   # Name of the mesh file (with extension)
-  set Mesh file            = mesh.ucd
+  set mesh file            = mesh.ucd
 
   # Background region material ID (no recovery performed here)
   set background region id = 0
