@@ -44,23 +44,36 @@ namespace ForwardSolver
     system_matrix.clear();
     
     // Renumber by lower/higher order
-    std::vector<unsigned int> reorder_counts(4);
+    std::vector<unsigned int> reorder_counts;
     MyDoFRenumbering::by_dimension<dim, DoFHandler<dim>>(dof_handler, reorder_counts);
     
     unsigned int total_dofs = dof_handler.n_dofs();
+    std::cout << total_dofs << std::endl;
+    for (unsigned int b=0; b<reorder_counts.size(); ++b)
+    {
+      std::cout << reorder_counts[b] << std::endl;
+    }
 
     unsigned int n_lowest_order_dofs = reorder_counts[0];
-    unsigned int n_higher_order_edge_dofs = reorder_counts[1];
-    unsigned int n_higher_order_face_dofs = reorder_counts[2];
-    unsigned int n_higher_order_cell_dofs = reorder_counts[3];
+    unsigned int n_higher_order_edge_gradients_dofs = reorder_counts[1];
+    unsigned int n_higher_order_face_gradients_dofs = reorder_counts[2];
+    unsigned int n_higher_order_cell_gradients_dofs = reorder_counts[3];
+    unsigned int n_higher_order_face_nongradients_dofs = reorder_counts[4];    
+    unsigned int n_higher_order_cell_nongradients_dofs = reorder_counts[5];
     
-    unsigned int n_higher_order_dofs = n_higher_order_edge_dofs + n_higher_order_face_dofs + n_higher_order_cell_dofs;
+    unsigned int n_higher_order_dofs = n_higher_order_edge_gradients_dofs
+                                       + n_higher_order_face_gradients_dofs
+                                       + n_higher_order_face_nongradients_dofs
+                                       + n_higher_order_cell_gradients_dofs
+                                       + n_higher_order_cell_nongradients_dofs;
     
-    unsigned int remaining_dofs = total_dofs
+    int remaining_dofs = total_dofs
     - n_lowest_order_dofs
-    - n_higher_order_edge_dofs
-    - n_higher_order_face_dofs
-    - n_higher_order_cell_dofs;
+    - n_higher_order_edge_gradients_dofs
+    - n_higher_order_face_gradients_dofs
+    - n_higher_order_face_nongradients_dofs
+    - n_higher_order_cell_gradients_dofs
+    - n_higher_order_cell_nongradients_dofs;
     if (remaining_dofs !=0)
     {
       std::cout << std::endl << "WARNING! Renumbering did not find all DoFs!" << std::endl;
