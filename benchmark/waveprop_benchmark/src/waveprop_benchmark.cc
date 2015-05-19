@@ -114,6 +114,22 @@ namespace wavepropBenchmark
         }
       }
     }
+    else // Dirichlet
+    {
+      typename Triangulation<dim>::active_cell_iterator
+      cell = tria.begin (),
+      endc = tria.end();
+      for (; cell!=endc; ++cell)
+      {
+        for (unsigned int face=0; face<GeometryInfo<dim>::faces_per_cell; ++face)
+        {
+          if (cell->face(face)->at_boundary())
+          {
+            cell->face(face)->set_boundary_id (0);
+          }
+        }
+      }
+    }
     
 
     // Now refine the outer mesh
@@ -131,25 +147,56 @@ namespace wavepropBenchmark
   }
   template <int dim>
   void wavepropBenchmark<dim>::run(std::string input_filename, 
-                                 std::string output_filename)
+                                   std::string output_filename)
   {
     
     ParameterHandler prm;
     InputTools::ParameterReader param(prm);
     param.read_and_copy_parameters(input_filename);
+    // Allow for choice of mesh completely by input file:
+    if (MeshData::external_mesh)
+    {
+      InputTools::read_in_mesh<dim>(MeshData::mesh_filename,
+                                    tria);
+      // TODO:
+//       if (MeshData::h_refinement > 0)
+//       tria.refine_global(MeshData::h_refinement);
+      if (MeshData::boundary_shape == "cube_distorted")
+      {
+        GridTools::distort_random (0.2, tria, false);  
+      }
+    }
+    else
+    {
+      if (MeshData::boundary_shape == "cube" || MeshData::boundary_shape == "cube_distorted")
+      {
+        GridGenerator::hyper_cube (tria,
+                                   MeshData::xmin,
+                                   MeshData::xmax);
+        tria.refine_global (1);
+        if (MeshData::boundary_shape == "cube_distorted")
+        {
+          GridTools::distort_random (0.2, tria, false);
+        }
+      }
+      else if (MeshData::boundary_shape == "cylinder")
+      {
+        GridGenerator::cylinder (tria, MeshData::radius, MeshData::height);
+        static const CylinderBoundary<dim> cyl_boundary (MeshData::radius);
+        tria.set_manifold (0, cyl_boundary);
+//         tria.refine_global(1);
+        GridTools::distort_random (0.2, tria, true);
+      }
+      else if (MeshData::boundary_shape == "sphere")
+      {
+        GridGenerator::hyper_ball (tria, Point<dim> (0.0,0.0,0.0), MeshData::radius);
+        static const HyperBallBoundary<dim> sph_boundary (Point<dim> (0.0,0.0,0.0), MeshData::radius);
+        tria.set_boundary (0, sph_boundary);
+        tria.refine_global(1);
+      }
+    }
     
-
-    
-    InputTools::read_in_mesh<dim>(IO_Data::mesh_filename,
-                                  tria);
-                                  
-
-    
-//     GridGenerator::hyper_cube (tria, -0.0125, 0.0125);
-//     tria.refine_global (2);
-//     GridTools::distort_random (0.2, tria, false);
-    
-    process_mesh(false);
+    process_mesh(true);
     
     // construct RHS for this field:
     Vector<double> p_wave(dim);
