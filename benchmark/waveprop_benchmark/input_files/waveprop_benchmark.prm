@@ -10,25 +10,25 @@ subsection Mesh Data
   set mesh file = unspecified
   
   # Type of boundary (cube/cylinder_z)
-  set boundary shape = cube
+  set boundary shape = cylinder
   
   # Maximum value of x
-  set xmax = 1.0
+  set xmax = 0.5
   
   # Minimum value of x
-  set xmin = -1.0
+  set xmin = 0.0
   
   # Maximum value of y
-  set ymax = 1.0
+  set ymax = 0.0
   
   # Minimum value of y
-  set ymin = -1.0
+  set ymin = 0.0
   
   # Maximum value of z
-  set zmax = 1.0
+  set zmax = 0.0
   
   # Minimum value of z
-  set zmin = -1.0
+  set zmin = 0.0
   
   # Radius of mesh (if applicable)
   set radius = 0.5
@@ -42,7 +42,7 @@ end
 subsection Output Parameters
 
   # Name of the output file (without extension)
-  set Output filename = cube_solution
+  set Output filename = cyl
   
   # Output file extension
   set Output filetype = vtk
