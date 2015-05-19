@@ -100,7 +100,7 @@ namespace wavepropBenchmark
     // Set boundaries to neumann (boundary_id = 10)
     if (neumann_flag)
     {
-      typename Triangulation<dim>::active_cell_iterator
+      typename Triangulation<dim>::cell_iterator
       cell = tria.begin (),
       endc = tria.end();
       for (; cell!=endc; ++cell)
@@ -116,7 +116,7 @@ namespace wavepropBenchmark
     }
     else // Dirichlet
     {
-      typename Triangulation<dim>::active_cell_iterator
+      typename Triangulation<dim>::cell_iterator
       cell = tria.begin (),
       endc = tria.end();
       for (; cell!=endc; ++cell)
