@@ -66,6 +66,14 @@ namespace ForwardSolver
                                        + n_higher_order_face_nongradients_dofs
                                        + n_higher_order_cell_gradients_dofs
                                        + n_higher_order_cell_nongradients_dofs;
+
+    const unsigned int n_higher_order_gradient_dofs
+     = n_higher_order_edge_gradients_dofs
+       + n_higher_order_face_gradients_dofs
+       + n_higher_order_cell_gradients_dofs;
+    const unsigned int n_higher_order_non_gradient_dofs
+     = n_higher_order_face_nongradients_dofs
+       + n_higher_order_cell_nongradients_dofs;
     
     int remaining_dofs = total_dofs
     - n_lowest_order_dofs
@@ -118,15 +126,31 @@ namespace ForwardSolver
     else
     {
       // 2 by 2 block:
-      BlockDynamicSparsityPattern csp (2,2);
+//       BlockDynamicSparsityPattern csp (2,2);
+//       
+//       csp.block(0,0).reinit (n_lowest_order_dofs, n_lowest_order_dofs);
+//       csp.block(0,1).reinit (n_lowest_order_dofs, n_higher_order_dofs);
+//       csp.block(1,0).reinit (n_higher_order_dofs, n_lowest_order_dofs);
+//       csp.block(1,1).reinit (n_higher_order_dofs, n_higher_order_dofs);
+//       csp.collect_sizes();
       
-      csp.block(0,0).reinit (n_lowest_order_dofs, n_lowest_order_dofs);
-      csp.block(0,1).reinit (n_lowest_order_dofs, n_higher_order_dofs);
-      csp.block(1,0).reinit (n_higher_order_dofs, n_lowest_order_dofs);
-      csp.block(1,1).reinit (n_higher_order_dofs, n_higher_order_dofs);
+      // 3 by 3 block
+      // Block1: Lowest order
+      // Block2: gradient-based higher order
+      // Block3: non-gradient-based higher order
+      BlockDynamicSparsityPattern csp(3,3);
+      csp.block(0,0).reinit (n_lowest_order_dofs,n_lowest_order_dofs);
+      csp.block(0,1).reinit (n_lowest_order_dofs, n_higher_order_gradient_dofs);
+      csp.block(0,2).reinit (n_lowest_order_dofs, n_higher_order_non_gradient_dofs);
+      
+      csp.block(1,0).reinit (n_higher_order_gradient_dofs, n_lowest_order_dofs);
+      csp.block(1,1).reinit (n_higher_order_gradient_dofs, n_higher_order_gradient_dofs);
+      csp.block(1,2).reinit (n_higher_order_gradient_dofs, n_higher_order_non_gradient_dofs);
+      
+      csp.block(2,0).reinit (n_higher_order_non_gradient_dofs, n_lowest_order_dofs);
+      csp.block(2,1).reinit (n_higher_order_non_gradient_dofs, n_higher_order_gradient_dofs);
+      csp.block(2,2).reinit (n_higher_order_non_gradient_dofs, n_higher_order_non_gradient_dofs);
       csp.collect_sizes();
-      
-      
       //Full 4 by 4 block:
       /*
        *   BlockDynamicSparsityPattern csp (4,4);
@@ -176,15 +200,28 @@ namespace ForwardSolver
     else
     {
       // 2 by 2 blocks:
-      solution.reinit(2);
+//       solution.reinit(2);
+//       solution.block(0).reinit (n_lowest_order_dofs);
+//       solution.block(1).reinit (n_higher_order_dofs);
+//       solution.collect_sizes();
+//       
+//       system_rhs.reinit(2);
+//       system_rhs.block(0).reinit (n_lowest_order_dofs);
+//       system_rhs.block(1).reinit (n_higher_order_dofs);
+//       system_rhs.collect_sizes();
+      
+      // 3 by 3 blocks:
+      solution.reinit(3);
       solution.block(0).reinit (n_lowest_order_dofs);
-      solution.block(1).reinit (n_higher_order_dofs);
+      solution.block(1).reinit (n_higher_order_gradient_dofs);
+      solution.block(2).reinit (n_higher_order_non_gradient_dofs);
       solution.collect_sizes();
       
-      system_rhs.reinit(2);
+      system_rhs.reinit(3);
       system_rhs.block(0).reinit (n_lowest_order_dofs);
-      system_rhs.block(1).reinit (n_higher_order_dofs);
-      system_rhs.collect_sizes();
+      system_rhs.block(1).reinit (n_higher_order_gradient_dofs);
+      system_rhs.block(2).reinit (n_higher_order_non_gradient_dofs);
+      system_rhs.collect_sizes();      
       
       // 4 by 4 blocks:
       /*
