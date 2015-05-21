@@ -131,12 +131,9 @@ namespace ForwardSolver
     BlockVector<double> system_rhs;
     
     // Preconditioner:
-    // low order only:
-    SmartPointer<Preconditioner::EddyCurrentPreconditioner_low_order> preconditioner_low_order;
-    // both high and low order:
-    SmartPointer<Preconditioner::EddyCurrentPreconditioner> preconditioner;
     BlockSparseMatrix<double> system_preconditioner;
-    
+    // TODO: would this be better as SmartPointer<Preconditioner::EddyCurrentPreconditionerBase> preconditioner; ??
+    Preconditioner::EddyCurrentPreconditionerBase* preconditioner;
     
     // Constraints:
     ConstraintMatrix constraints;

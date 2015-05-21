@@ -48,11 +48,6 @@ namespace ForwardSolver
     MyDoFRenumbering::by_dimension<dim, DoFHandler<dim>>(dof_handler, reorder_counts);
     
     unsigned int total_dofs = dof_handler.n_dofs();
-    std::cout << total_dofs << std::endl;
-    for (unsigned int b=0; b<reorder_counts.size(); ++b)
-    {
-      std::cout << reorder_counts[b] << std::endl;
-    }
 
     unsigned int n_lowest_order_dofs = reorder_counts[0];
     unsigned int n_higher_order_edge_gradients_dofs = reorder_counts[1];
@@ -246,21 +241,13 @@ namespace ForwardSolver
   EddyCurrent<dim, DH>::~EddyCurrent ()
   {
     // Deconstructor: need to delete the pointers to preconditioners
-    // Have now replaced these with smart pointers - removing:
-    // TODO: delete once testing is complete.
-    /*
+    // TODO: Could this be better handled with a smart pointer?
+    
     if (~direct)
     {
-      if (p_order == 0)
-      {
-        delete preconditioner_low_order;
-      }
-      else
-      {
-        delete preconditioner;
-      }
+      delete preconditioner;
     }
-    */
+    
   }
   
   template <int dim, class DH>
@@ -824,26 +811,26 @@ namespace ForwardSolver
     if (initialised)
     {
       // Nothing to do.
+      // TODO: add reset_solver() which deletes the preconditioner and resets the direct solver.
       return;
     }
     else
     {
-      //     if (direct_solver_flag || p_order == 0)
       if (direct) // use direct solver (LU factorisation of whole matrix).
       {
         direct_solve.initialize(system_matrix);
       }
+      // Otherwise:
+      // Set up the preconditoner
+      // the constructor computes everything required so
+      // it can be passed straight to a solve() routine.
       else if (p_order == 0) // use low order preconditioner
       {
-        preconditioner_low_order = new Preconditioner::EddyCurrentPreconditioner_low_order (system_preconditioner);
-        
+        preconditioner = new Preconditioner::EddyCurrentPreconditioner_1x1_lowOrder (system_preconditioner);
       }
-      else // p>0 - use low & higher order preconditioner
+      else // p>0 - use low & higher order preconditioner with gradients
       {
-        // Set up the preconditoner
-        // the constructor computes everything required so
-        // it can be passed straight to a solve() routine.
-        preconditioner =  new Preconditioner::EddyCurrentPreconditioner (system_preconditioner);
+        preconditioner = new Preconditioner::EddyCurrentPreconditioner_3x3_lowHighOrderGradients (system_preconditioner);
       }
       initialised = true;
     }
@@ -870,7 +857,7 @@ namespace ForwardSolver
     {
       /*GMRES*/        
       SolverControl solver_control (system_matrix.m(),
-                                    1e-10*system_rhs.l2_norm(),
+                                    1e-8*system_rhs.l2_norm(),
                                     true, true); // Add to see residual history
       
       GrowingVectorMemory<BlockVector<double> > vector_memory;
@@ -885,20 +872,20 @@ namespace ForwardSolver
       gmres.solve(system_matrix,
                   solution,
                   system_rhs,
-                  *preconditioner_low_order);
+                  *preconditioner);
       
       // Output iterations to screen
       std::cout << "GMRES Iterations:                "
       << solver_control.last_step()
       << std::endl;
       
-      constraints.distribute (solution);      
+      constraints.distribute (solution);
     }
     else // p>0 use GMRES with low & higher order block preconditioner
     {        
       /*GMRES*/        
       SolverControl solver_control (system_matrix.m(),
-                                    1e-10*system_rhs.l2_norm(),
+                                    1e-8*system_rhs.l2_norm(),
                                     true, true); // Add to see residual history
       
       GrowingVectorMemory<BlockVector<double> > vector_memory;

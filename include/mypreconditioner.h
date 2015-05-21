@@ -22,62 +22,31 @@ using namespace dealii;
 #define MYPRECONDITIONER_H
 namespace Preconditioner
 {
-  // Preconditioning for use with an FE_Nedelec-based block matrix made up of lowest/higher order edges/faces/cells
-  // If we further split the blocks by real/imaginary parts then we'd need 8 blocks in total.
-  using namespace dealii;
-  class EddyCurrentPreconditioner : public Subscriptor
+  // base class for all eddy current preconditioners:
+  class EddyCurrentPreconditionerBase : public Subscriptor
   {
   public:
-    EddyCurrentPreconditioner (const BlockSparseMatrix<double> &A);
+    EddyCurrentPreconditionerBase (const BlockSparseMatrix<double> &A);
     
-    void vmult (BlockVector<double> &dst, const BlockVector<double> &src) const;
-    void Tvmult (BlockVector<double> &dst, const BlockVector<double> &src) const;
-  private:
+    virtual void vmult (BlockVector<double> &dst, const BlockVector<double> &src) const;
+    virtual void Tvmult (BlockVector<double> &dst, const BlockVector<double> &src) const;
+  protected:
     const SmartPointer<const BlockSparseMatrix<double> > precon_matrix;
-    mutable Vector<double> tmp0, tmp1;//, tmp2, tmp3;
-    
-    // Block 0: lowest order edges.    
-//     PreconditionIdentity block0;
-//     PreconditionJacobi<> block0;
-//     SparseILU<double> block0;
-//     SparseILU<double>::AdditionalData block0_data;
-//     PreconditionSOR<SparseMatrix<double> > block0;
-    SparseDirectUMFPACK block0;    
-    
-    // Block 1: higher order edges/faces/cells (or just edges if Block2/3 enabled:
-//     PreconditionIdentity block1;
-//      PreconditionJacobi<> block1;
-    SparseILU<double> block1;
-    SparseILU<double>::AdditionalData block1_data;
-//     PreconditionSOR<SparseMatrix<double> > block1;
-//    SparseDirectUMFPACK block1;
-  
-    // Block 2: higher order faces:
-//     PreconditionIdentity block2;
-//      PreconditionJacobi<> block2;
-//     SparseILU<double> block2;
-//    SparseDirectUMFPACK block2;
-    
-    // Block 3: higher order cells:
-//     PreconditionIdentity block3;
-//      PreconditionJacobi<> block3;
-//     SparseILU<double> block3;
-//    SparseDirectUMFPACK block3;
   };
-  
-    
-  // Preconditioner for iterative solver with 1 block (i.e. p=0 case):
-  class EddyCurrentPreconditioner_low_order : public Subscriptor
+
+  // Preconditioner for iterative solver, made up of a single block.
+  // This essentially assumes the use of p=0.
+  class EddyCurrentPreconditioner_1x1_lowOrder : public virtual EddyCurrentPreconditionerBase
   {
   public:
-    EddyCurrentPreconditioner_low_order (const BlockSparseMatrix<double> &A);
-    
-    void vmult (BlockVector<double> &dst, const BlockVector<double> &src) const;
-    void Tvmult (BlockVector<double> &dst, const BlockVector<double> &src) const;
+    EddyCurrentPreconditioner_1x1_lowOrder (const BlockSparseMatrix<double> &A);
+
+    virtual void vmult (BlockVector<double> &dst, const BlockVector<double> &src) const;
+    virtual void Tvmult (BlockVector<double> &dst, const BlockVector<double> &src) const;
   private:
-    const SmartPointer<const BlockSparseMatrix<double> > precon_matrix;
     mutable Vector<double> tmp0;
-    
+
+    // Various options for the single block.
 //     PreconditionIdentity block0;
 //     PreconditionJacobi<> block0;
 //     SparseILU<double> block0;
@@ -85,6 +54,79 @@ namespace Preconditioner
 //     PreconditionSOR<SparseMatrix<double> > block0;
     SparseDirectUMFPACK block0;
   };
-  
-} // END namespace Preconditioner
+
+  // Preconditioning for use with an FE_Nedelec-based 2x2 block matrix
+  // made up of:
+  // block 0: lowest
+  // block 1: higher order edges/faces/cells.
+  class EddyCurrentPreconditioner_2x2_lowHighOrder : public EddyCurrentPreconditionerBase
+  {
+  public:
+    EddyCurrentPreconditioner_2x2_lowHighOrder (const BlockSparseMatrix<double> &A);
+
+    void vmult (BlockVector<double> &dst, const BlockVector<double> &src) const;
+    void Tvmult (BlockVector<double> &dst, const BlockVector<double> &src) const;
+  private:
+//     const SmartPointer<const BlockSparseMatrix<double> > precon_matrix;
+    mutable Vector<double> tmp0, tmp1;
+
+    // Block 0: lowest order edges.    
+//     PreconditionIdentity block0;
+//     PreconditionJacobi<> block0;
+//     SparseILU<double> block0;
+//     SparseILU<double>::AdditionalData block0_data;
+//     PreconditionSOR<SparseMatrix<double> > block0;
+    SparseDirectUMFPACK block0;
+
+    // Block 1: higher order edges/faces/cells (or just edges if Block2/3 enabled:
+//     PreconditionIdentity block1;
+//      PreconditionJacobi<> block1;
+    SparseILU<double> block1;
+    SparseILU<double>::AdditionalData block1_data;
+//     PreconditionSOR<SparseMatrix<double> > block1;
+//    SparseDirectUMFPACK block1;
+  };
+
+  // Preconditioning for use with an FE_Nedelec-based 3x3 block matrix
+  // made up of:
+  // block 0: lowest
+  // block 1: gradient-based higher order edges/faces/cells
+  // block 2: non-gradient-based higher order edges/faces/cells
+  // TODO: Make use of a nested CG solver for the higher order blocks.
+  class EddyCurrentPreconditioner_3x3_lowHighOrderGradients : public EddyCurrentPreconditionerBase
+  {
+  public:
+    EddyCurrentPreconditioner_3x3_lowHighOrderGradients (const BlockSparseMatrix<double> &A);
+
+    void vmult (BlockVector<double> &dst, const BlockVector<double> &src) const;
+    void Tvmult (BlockVector<double> &dst, const BlockVector<double> &src) const;
+  private:
+//     const SmartPointer<const BlockSparseMatrix<double> > precon_matrix;
+    mutable Vector<double> tmp0, tmp1, tmp2;
+
+    // Block 0: lowest order:
+//     PreconditionIdentity block0;
+//     PreconditionJacobi<> block0;
+//     SparseILU<double> block0;
+//     SparseILU<double>::AdditionalData block0_data;
+//     PreconditionSOR<SparseMatrix<double> > block0;
+    SparseDirectUMFPACK block0;
+
+    // Block 1: higher order gradients:
+//     PreconditionIdentity block1;
+//     PreconditionJacobi<> block1;
+    SparseDirectUMFPACK block1;
+//     PreconditionSOR<SparseMatrix<double> > block1;
+//     SparseILU<double> block1;
+//     SparseILU<double>::AdditionalData block1_data;
+
+    // Block 2: higher order non-gradients:
+//     PreconditionIdentity block2;
+//     PreconditionJacobi<> block2;
+    SparseDirectUMFPACK block2;
+//     PreconditionSOR<SparseMatrix<double> > block2;
+//     SparseILU<double> block2;
+//     SparseILU<double>::AdditionalData block2_data;
+  };
+}
 #endif
