@@ -304,7 +304,7 @@ namespace MyDoFRenumbering
       {
         total_counted_dofs += all_dof_counts[b];
       }
-      std::cout << total_counted_dofs << std::endl;
+
       if (total_counted_dofs == n_global_dofs)
       {
         return total_counted_dofs;
