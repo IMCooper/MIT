@@ -15,6 +15,8 @@
 #include <myvectortools.h>
 #include <outputtools.h>
 
+#include <myfe_nedelec.h>
+
 using namespace dealii;
 
 namespace sphereBenchmark
@@ -42,7 +44,7 @@ namespace sphereBenchmark
   template <int dim>
   sphereBenchmark<dim>::sphereBenchmark(const unsigned int order)
   :
-  fe (FE_Nedelec<dim>(order), 2),
+  fe (MyFE_Nedelec<dim>(order), 2),
   dof_handler (tria),
   p_order(order)
   {
@@ -110,7 +112,7 @@ namespace sphereBenchmark
         {
           if (cell->face(face)->at_boundary())
           {
-            cell->face(face)->set_boundary_indicator (10);
+            cell->face(face)->set_boundary_id (10);
           }
         }
       }
