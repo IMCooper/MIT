@@ -99,13 +99,13 @@ namespace sphereBenchmark
     // Here we set the boundary ids for the boundary conditions
     // and may choose to mark the boundary as curved, etc.
     // Can also perform mesh refinement here.
+    typename Triangulation<dim>::cell_iterator cell, endc;
+    endc = tria.end();
     
     // Set boundaries to neumann (boundary_id = 10)
     if (neumann_flag)
     {
-      typename Triangulation<dim>::active_cell_iterator
-      cell = tria.begin (),
-      endc = tria.end();
+      cell = tria.begin ();      
       for (; cell!=endc; ++cell)
       {
         for (unsigned int face=0; face<GeometryInfo<dim>::faces_per_cell; ++face)
@@ -118,6 +118,28 @@ namespace sphereBenchmark
       }
     }
     
+    // make the interior sphere's boundary a spherical boundary
+    // TODO: find way to make this more robust.
+    double tolerance = 0.065;
+    unsigned int count =0;
+    std::cout << MeshData::radius << std::endl;
+    cell = tria.begin ();
+    for (; cell!=endc; ++cell)
+    {
+      if (cell->material_id() == 1)
+      {
+        for (unsigned int face=0; face<GeometryInfo<dim>::faces_per_cell; ++face)
+        {
+          if (abs(cell->face(face)->center().norm()-MeshData::radius) < tolerance)
+          {
+            cell->face(face)->set_all_manifold_ids(100);
+            ++count;
+            std::cout << cell << " " << face << " " << cell->face(face)->center()  << std::endl;
+          }
+        }
+      }
+    }
+    std::cout << count << std::endl;
 
     // Now refine the outer mesh
     /*
@@ -145,8 +167,11 @@ namespace sphereBenchmark
                                   tria);
     
     process_mesh(false);
-    initialise_materials();
+    // Set the marked boundary to be spherical:
+    static const HyperBallBoundary<dim> sph_boundary (Point<dim> (0.0,0.0,0.0), MeshData::radius);
+    tria.set_manifold (100, sph_boundary);
     
+    initialise_materials();    
     // TESTING
     // Check polar coords:
 //     {
@@ -247,14 +272,14 @@ namespace sphereBenchmark
                                                         boundary_conditions);
     std::cout << "HCurl Error: " << hcurlerr << std::endl;
     
-//     {
-//       std::ostringstream tmp;
-//       tmp << output_filename;    
-//       OutputTools::output_to_vtk<dim, DoFHandler<dim>>(dof_handler,
-//                                                        solution,
-//                                                        tmp.str(),
-//                                                        boundary_conditions);
-//     }
+    {
+      std::ostringstream tmp;
+      tmp << output_filename;    
+      OutputTools::output_to_vtk<dim, DoFHandler<dim>>(dof_handler,
+                                                       solution,
+                                                       tmp.str(),
+                                                       boundary_conditions);
+    }
     
     // Output the solution fields along a line to a text file:
     Point <dim> xaxis;
