@@ -191,7 +191,7 @@ namespace wavepropBenchmark
       {
         GridGenerator::hyper_ball (tria, Point<dim> (0.0,0.0,0.0), MeshData::radius);
         static const HyperBallBoundary<dim> sph_boundary (Point<dim> (0.0,0.0,0.0), MeshData::radius);
-        tria.set_boundary (0, sph_boundary);
+        tria.set_manifold (0, sph_boundary);
         tria.refine_global(1);
       }
     }
