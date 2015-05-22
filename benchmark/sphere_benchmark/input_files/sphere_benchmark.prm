@@ -3,6 +3,9 @@
 
 subsection Mesh Data
 
+  # Use an external mesh file (specified by mesh file)
+  set external mesh = false 
+
   # Name of the output file (without extension)
   set mesh file = ../mesh/cubittest.ucd
     
@@ -12,12 +15,26 @@ subsection Mesh Data
   # Maximum value of x
   set xmax = 1.0
   
+  # Minimum value of x
+  set xmin = -1.0
+  
   # Maximum value of y
   set ymax = 1.0
   
+  # Minimum value of y
+  set ymin = -1.0
+  
   # Maximum value of z
   set zmax = 1.0
-
+  
+  # Minimum value of z
+  set zmin = -1.0
+  
+  # Radius of mesh (if applicable)
+  set radius = 0.5
+  
+  # Height of mesh (if applicable)
+  set height = 1.0
 end
 
 
@@ -102,7 +119,7 @@ end
 subsection Preconditioner Data
 
   # Enable the sparse direct solver (disables the GMRES solver)
-  set use direct = false
+  set use direct = true
 
   # SparseILU diagonal strengthening
   set diagonal strengthening = 1e6
