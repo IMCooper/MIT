@@ -197,16 +197,28 @@ namespace OutputTools
   template class Postprocessor<3>;
   
   // Outputs to VTK:
-  template<int dim, class DH>
+    template<int dim, class DH>
   void output_to_vtk (const DH &dof_handler,
-                      const Vector<double> solution,
-                      const std::string vtk_filename,
+                      const Vector<double> &solution,
+                      const std::string &vtk_filename,
+                      const curlFunction<dim> &exact_solution)
+  {
+    // Default Q1 mapping, calls the full version below.
+    output_to_vtk(StaticMappingQ1<dim>::mapping,
+                  dof_handler,
+                  solution,
+                  vtk_filename,
+                  exact_solution);
+  }
+  template<int dim, class DH>
+  void output_to_vtk (const Mapping<dim> &mapping,
+                      const DH &dof_handler,
+                      const Vector<double> &solution,
+                      const std::string &vtk_filename,
                       const curlFunction<dim> &exact_solution)
   {
     unsigned int n_subdivisions = 3;
     unsigned int p_order = dof_handler.get_fe().degree-1;
-    
-    MappingQ<dim> mapping(2,true);
     
     std::ostringstream filename;
     filename << vtk_filename << "_p" << p_order << ".vtk";
@@ -283,12 +295,36 @@ namespace OutputTools
   }
   // Template instantiation:
   template void output_to_vtk<>(const DoFHandler<3> &,
-                                const Vector<double>,
-                                const std::string,
+                                const Vector<double> &,
+                                const std::string &,
+                                const curlFunction<3> &);
+  template void output_to_vtk<>(const Mapping<3> &,
+                                const DoFHandler<3> &,
+                                const Vector<double> &,
+                                const std::string &,
                                 const curlFunction<3> &);
   
   template <int dim, class DH>
   void output_radial_values(const DH &dof_handler,
+                            const Vector<double> &solution,
+                            const perturbedFunction<dim> &boundary_conditions,
+                            const Vector<double> &uniform_field,
+                            const Point<dim> &end_point,
+                            const std::string &filename)
+  {
+    // Default Q1 mapping, calls the full version below.
+    output_radial_values(StaticMappingQ1<dim>::mapping,
+                         dof_handler,
+                         solution,
+                         boundary_conditions,
+                         uniform_field,
+                         end_point,
+                         filename);
+  }
+  
+  template <int dim, class DH>
+  void output_radial_values(const Mapping<dim> &mapping,
+                            const DH &dof_handler,
                             const Vector<double> &solution,
                             const perturbedFunction<dim> &boundary_conditions,
                             const Vector<double> &uniform_field,
@@ -331,7 +367,6 @@ namespace OutputTools
     boundary_conditions.perturbed_field_value_list(measurement_points,
                                                    perturbed_field_values_exact);
     
-    MappingQ<dim> mapping(2,true);
     for (unsigned int i=0; i<measurement_points.size(); ++i)
     {
       VectorTools::point_value(mapping,
@@ -341,7 +376,8 @@ namespace OutputTools
                                field_values_approx[i]);
       
       Vector<double> temp_curl(dim+dim);
-      MyVectorTools::point_curl(dof_handler,
+      MyVectorTools::point_curl(mapping,
+                                dof_handler,
                                 solution,
                                 measurement_points[i],
                                 temp_curl);
@@ -400,6 +436,13 @@ namespace OutputTools
   }
   // Template instantiation:
   template void output_radial_values(const DoFHandler<3> &,
+                                     const Vector<double> &,
+                                     const perturbedFunction<3> &,
+                                     const Vector<double> &,
+                                     const Point<3> &,                            
+                                     const std::string &);
+  template void output_radial_values(const Mapping<3> &,
+                                     const DoFHandler<3> &,
                                      const Vector<double> &,
                                      const perturbedFunction<3> &,
                                      const Vector<double> &,

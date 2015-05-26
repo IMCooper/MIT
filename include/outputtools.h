@@ -4,6 +4,9 @@
 #include <deal.II/base/tensor.h>
 
 #include <deal.II/dofs/dof_handler.h>
+
+#include <deal.II/fe/mapping.h>
+
 #include <deal.II/hp/dof_handler.h>
 
 #include <deal.II/lac/vector.h>
@@ -57,8 +60,14 @@ namespace OutputTools
   
   template<int dim, class DH>
   void output_to_vtk (const DH &dof_handler,
-                      const Vector<double> solution,
-                      const std::string vtk_filename,
+                      const Vector<double> &solution,
+                      const std::string &vtk_filename,
+                      const curlFunction<dim> &exact_solution);
+  template<int dim, class DH>
+  void output_to_vtk (const Mapping<dim> &mapping,
+                      const DH &dof_handler,
+                      const Vector<double> &solution,
+                      const std::string &vtk_filename,
                       const curlFunction<dim> &exact_solution);
   
   // TODO ADD output_radial_perturbed_values.
@@ -79,6 +88,13 @@ namespace OutputTools
                             const Vector<double> &uniform_field,
                             const Point<dim> &end_point,
                             const std::string &filename);
-  
+  template <int dim, class DH>
+  void output_radial_values(const Mapping<dim> &mapping,
+                            const DH &dof_handler,
+                            const Vector<double> &solution,
+                            const perturbedFunction<dim> &boundary_conditions,
+                            const Vector<double> &uniform_field,
+                            const Point<dim> &end_point,
+                            const std::string &filename);
 }
 #endif
