@@ -121,8 +121,8 @@ namespace sphereBenchmark
     // make the interior sphere's boundary a spherical boundary
     // TODO: find way to make this more robust.
     double tolerance = 0.065;
-    unsigned int count =0;
-    std::cout << MeshData::radius << std::endl;
+//     unsigned int count =0;
+//     std::cout << MeshData::radius << std::endl;
     cell = tria.begin ();
     for (; cell!=endc; ++cell)
     {
@@ -133,13 +133,13 @@ namespace sphereBenchmark
           if (abs(cell->face(face)->center().norm()-MeshData::radius) < tolerance)
           {
             cell->face(face)->set_all_manifold_ids(100);
-            ++count;
-            std::cout << cell << " " << face << " " << cell->face(face)->center()  << std::endl;
+//             ++count;
+//             std::cout << cell << " " << face << " " << cell->face(face)->center()  << std::endl;
           }
         }
       }
     }
-    std::cout << count << std::endl;
+//     std::cout << count << std::endl;
 
     // Now refine the outer mesh
     /*
