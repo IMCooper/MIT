@@ -92,19 +92,22 @@ namespace ForwardSolver
     // FE_Nedelec boundary constraints: note we just a zero function as we have not passed the actual function yet.
     // TODO: verify that this does not change anything !!
     // Real part (begins at 0):
+    MappingQ<dim> mapping(2,true);
     VectorTools::project_boundary_values_curl_conforming_l2 (dof_handler,
                                                              0,
                                                              //                                                                boundary_function,
                                                              ZeroFunction<dim> (dim+dim),
                                                              0,
-                                                             constraints);
+                                                             constraints,
+                                                             mapping);
     // Imaginary part (begins at dim):
     VectorTools::project_boundary_values_curl_conforming_l2 (dof_handler,
                                                              dim,
                                                              //                                                                boundary_function,
                                                              ZeroFunction<dim> (dim+dim),
                                                              0,
-                                                             constraints);
+                                                             constraints,
+                                                             mapping);
     
     constraints.close ();
 
@@ -270,17 +273,18 @@ namespace ForwardSolver
     
     // FE_Nedelec boundary condition:
     // Real part (begins at 0):
+    MappingQ<dim> mapping(2,true);
     VectorTools::project_boundary_values_curl_conforming_l2 (dof_handler,
                                                              0,
                                                              boundary_function,
                                                              0,
-                                                             constraints);
+                                                             constraints, mapping);
     // Imaginary part (begins at dim):
     VectorTools::project_boundary_values_curl_conforming_l2 (dof_handler,
                                                              dim,
                                                              boundary_function,
                                                              0,
-                                                             constraints);
+                                                             constraints, mapping);
     constraints.close ();
     
   }
@@ -296,11 +300,14 @@ namespace ForwardSolver
      */
     QGauss<dim>  quadrature_formula(quad_order);
     
+    MappingQ<dim> mapping(2,true);
+    
     const unsigned int n_q_points = quadrature_formula.size();
     
     const unsigned int dofs_per_cell = fe->dofs_per_cell;
     
-    FEValues<dim> fe_values (*fe, quadrature_formula,
+    FEValues<dim> fe_values (mapping,
+                             *fe, quadrature_formula,
                              update_values    |  update_gradients |
                              update_quadrature_points  |  update_JxW_values);
     
@@ -362,7 +369,7 @@ namespace ForwardSolver
                 
                 cell_matrix(i,j) += ( curl_part + current_kappa_re*mass_part )*fe_values.JxW(q_point);
                 
-                cell_preconditioner(i,j) += ( curl_part + current_kappa_magnitude*mass_part )*fe_values.JxW(q_point);  
+                cell_preconditioner(i,j) += ( curl_part + current_kappa_magnitude*mass_part )*fe_values.JxW(q_point);
               }
               else if (block_index_i == 1)
               {
@@ -371,7 +378,7 @@ namespace ForwardSolver
                 
                 cell_matrix(i,j) += ( curl_part + current_kappa_re*mass_part )*fe_values.JxW(q_point);
                                       
-                cell_preconditioner(i,j) += ( curl_part + current_kappa_magnitude*mass_part )*fe_values.JxW(q_point);  
+                cell_preconditioner(i,j) += ( curl_part + current_kappa_magnitude*mass_part )*fe_values.JxW(q_point);
               }  
             }
             else
@@ -383,7 +390,6 @@ namespace ForwardSolver
               else if (block_index_i == 1) // then block_index_j == 0
               {
                 cell_matrix(i,j) += current_kappa_im*fe_values[E_im].value(i,q_point)*fe_values[E_re].value(j,q_point)*fe_values.JxW(q_point);
-                
               }
             }  
           }
@@ -432,15 +438,19 @@ namespace ForwardSolver
     QGauss<dim-1> face_quadrature_formula(quad_order);
     const unsigned int n_face_q_points = face_quadrature_formula.size();
     
+    MappingQ<dim> mapping(2,true);
+    
     const unsigned int dofs_per_cell = fe->dofs_per_cell;
 
     // Needed to calc the local matrix for distribute_local_to_global
     // Note: only need the columns of the constrained entries.
-    FEValues<dim> fe_values (*fe, quadrature_formula,
+    FEValues<dim> fe_values (mapping,
+                             *fe, quadrature_formula,
                              update_values    |  update_gradients |
                              update_quadrature_points  |  update_JxW_values);
     
-    FEFaceValues<dim> fe_face_values(*fe, face_quadrature_formula,
+    FEFaceValues<dim> fe_face_values(mapping,
+                                     *fe, face_quadrature_formula,
                                      update_values | update_quadrature_points |
                                      update_normal_vectors | update_JxW_values);
     
@@ -857,7 +867,7 @@ namespace ForwardSolver
     {
       /*GMRES*/        
       SolverControl solver_control (system_matrix.m(),
-                                    1e-8*system_rhs.l2_norm(),
+                                    1e-6*system_rhs.l2_norm(),
                                     true, true); // Add to see residual history
       
       GrowingVectorMemory<BlockVector<double> > vector_memory;
@@ -885,7 +895,7 @@ namespace ForwardSolver
     {        
       /*GMRES*/        
       SolverControl solver_control (system_matrix.m(),
-                                    1e-8*system_rhs.l2_norm(),
+                                    1e-6*system_rhs.l2_norm(),
                                     true, true); // Add to see residual history
       
       GrowingVectorMemory<BlockVector<double> > vector_memory;

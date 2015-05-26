@@ -155,7 +155,7 @@ namespace MyVectorTools
     
     const unsigned int dofs_per_cell = dof_handler.get_fe().dofs_per_cell;
     
-    MappingQ1<dim> mapping;
+    MappingQ<dim> mapping(2,true);
     const std::pair<typename DH::active_cell_iterator, Point<dim> >
       cell_point = GridTools::find_active_cell_around_point(mapping, dof_handler, point);
     

@@ -203,8 +203,10 @@ namespace OutputTools
                       const std::string vtk_filename,
                       const curlFunction<dim> &exact_solution)
   {
-    unsigned int n_subdivisions = 2;
+    unsigned int n_subdivisions = 3;
     unsigned int p_order = dof_handler.get_fe().degree-1;
+    
+    MappingQ<dim> mapping(2,true);
     
     std::ostringstream filename;
     filename << vtk_filename << "_p" << p_order << ".vtk";
@@ -218,7 +220,8 @@ namespace OutputTools
     data_out.attach_dof_handler (dof_handler);
     
     data_out.add_data_vector (solution, postprocessor);
-    data_out.build_patches (n_subdivisions);
+    
+    data_out.build_patches (mapping, n_subdivisions, DataOut<dim>::curved_inner_cells);
     data_out.write_vtk (output);
     
     // Section to append the material parameters onto the end of the VTK file:
@@ -328,9 +331,11 @@ namespace OutputTools
     boundary_conditions.perturbed_field_value_list(measurement_points,
                                                    perturbed_field_values_exact);
     
+    MappingQ<dim> mapping(2,true);
     for (unsigned int i=0; i<measurement_points.size(); ++i)
     {
-      VectorTools::point_value(dof_handler,
+      VectorTools::point_value(mapping,
+                               dof_handler,
                                solution,
                                measurement_points[i],
                                field_values_approx[i]);

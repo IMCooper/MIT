@@ -12,6 +12,7 @@
 #include <deal.II/fe/fe_nedelec.h>
 #include <deal.II/fe/fe_system.h>
 #include <deal.II/fe/fe_values.h>
+#include <deal.II/fe/mapping_q.h>
 
 #include <deal.II/hp/dof_handler.h>
 
