@@ -7,22 +7,48 @@ namespace ForwardSolver
   // CLASS EDDY CURRENT MEMBERS:
   template <int dim, class DH>
   EddyCurrent<dim, DH>::EddyCurrent(DH &dof_handler,
-                                    const FiniteElement<dim> &fe,                      
-//                                     const curlFunction<dim> &boundary_function,// TODO: check ok to remove.
-                                    const bool direct_solver_flag)
+                                    const FiniteElement<dim> &fe,
+                                    const bool direct_flag)
   :
-  fe(&fe)
+  fe(&fe),
+  mapping(&StaticMappingQ1<dim>::mapping),
+  direct(direct_flag)
   {
+    
     // Constructor for the class:
     // 
     // Input:
     // - DoFHandler with a triangulation and finite element attached (can used dof_handler.initialise).
-    // - REMOVED FOR NOW: Finite element, which should be a FESystem containing two blocks/copies of an FE_Nedelec element.
+    // - Finite element, which should be a FESystem containing two blocks/copies of an FE_Nedelec element.
     // 
     // Output:
     // - The modified DoFHandler.
+    
+    constructor_setup(dof_handler,
+                      direct_flag);
+  }
+  template <int dim, class DH>
+  EddyCurrent<dim, DH>::EddyCurrent(const Mapping<dim> &mapping_in,
+                                    DH &dof_handler,
+                                    const FiniteElement<dim> &fe,
+                                    const bool direct_flag)
+  :
+  fe(&fe),
+  mapping(&mapping_in),
+  direct(direct_flag)
+  {
+    constructor_setup(dof_handler,
+                      direct_flag);
+  }
+  
+  template<int dim, class DH>
+  void EddyCurrent<dim, DH>::constructor_setup(DH &dof_handler,
+                                          const bool direct_flag)
+                                          
+  {
+    // Code common to either version of the contructor
     // 
-    // The constructor will distribute the degrees of freedom for the input FiniteElement and then re-order
+    // This will distribute the degrees of freedom for the input FiniteElement and then re-order
     // the DoF numbering into blocks of lower and higher order basis functions.
     //
     // Finally, the constraints and sparsity pattern for the matrix is created using a dummy boundary function.
@@ -30,14 +56,14 @@ namespace ForwardSolver
     // the constraints will only contain hanging node constraints (if present).
     
     // set private direct solver flag:
-    direct = direct_solver_flag;
+    direct = direct_flag;
 
-    p_order = fe.degree - 1;
+    p_order = fe->degree - 1;
     
     //TODO: work out what the order should be.
     // Some quick tests suggest it should be 2*N+4..
     // this is when the voltages didn't change against the next order up (2*N+5).
-    quad_order = 2*(p_order+1) + 1;
+    quad_order = 2*(fe->degree) + 1;
     
     
     // Setup for FEM:
@@ -92,22 +118,19 @@ namespace ForwardSolver
     // FE_Nedelec boundary constraints: note we just a zero function as we have not passed the actual function yet.
     // TODO: verify that this does not change anything !!
     // Real part (begins at 0):
-    MappingQ<dim> mapping(2,true);
     VectorTools::project_boundary_values_curl_conforming_l2 (dof_handler,
                                                              0,
-                                                             //                                                                boundary_function,
                                                              ZeroFunction<dim> (dim+dim),
                                                              0,
                                                              constraints,
-                                                             mapping);
+                                                             *mapping);
     // Imaginary part (begins at dim):
     VectorTools::project_boundary_values_curl_conforming_l2 (dof_handler,
                                                              dim,
-                                                             //                                                                boundary_function,
                                                              ZeroFunction<dim> (dim+dim),
                                                              0,
                                                              constraints,
-                                                             mapping);
+                                                             *mapping);
     
     constraints.close ();
 
@@ -273,18 +296,19 @@ namespace ForwardSolver
     
     // FE_Nedelec boundary condition:
     // Real part (begins at 0):
-    MappingQ<dim> mapping(2,true);
     VectorTools::project_boundary_values_curl_conforming_l2 (dof_handler,
                                                              0,
                                                              boundary_function,
                                                              0,
-                                                             constraints, mapping);
+                                                             constraints,
+                                                             *mapping);
     // Imaginary part (begins at dim):
     VectorTools::project_boundary_values_curl_conforming_l2 (dof_handler,
                                                              dim,
                                                              boundary_function,
                                                              0,
-                                                             constraints, mapping);
+                                                             constraints,
+                                                             *mapping);
     constraints.close ();
     
   }
@@ -300,13 +324,11 @@ namespace ForwardSolver
      */
     QGauss<dim>  quadrature_formula(quad_order);
     
-    MappingQ<dim> mapping(2,true);
-    
     const unsigned int n_q_points = quadrature_formula.size();
     
     const unsigned int dofs_per_cell = fe->dofs_per_cell;
     
-    FEValues<dim> fe_values (mapping,
+    FEValues<dim> fe_values (*mapping,
                              *fe, quadrature_formula,
                              update_values    |  update_gradients |
                              update_quadrature_points  |  update_JxW_values);
@@ -438,18 +460,16 @@ namespace ForwardSolver
     QGauss<dim-1> face_quadrature_formula(quad_order);
     const unsigned int n_face_q_points = face_quadrature_formula.size();
     
-    MappingQ<dim> mapping(2,true);
-    
     const unsigned int dofs_per_cell = fe->dofs_per_cell;
 
     // Needed to calc the local matrix for distribute_local_to_global
     // Note: only need the columns of the constrained entries.
-    FEValues<dim> fe_values (mapping,
+    FEValues<dim> fe_values (*mapping,
                              *fe, quadrature_formula,
                              update_values    |  update_gradients |
                              update_quadrature_points  |  update_JxW_values);
     
-    FEFaceValues<dim> fe_face_values(mapping,
+    FEFaceValues<dim> fe_face_values(*mapping,
                                      *fe, face_quadrature_formula,
                                      update_values | update_quadrature_points |
                                      update_normal_vectors | update_JxW_values);

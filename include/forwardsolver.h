@@ -13,6 +13,8 @@
 #include <deal.II/fe/fe_system.h>
 #include <deal.II/fe/fe_values.h>
 #include <deal.II/fe/mapping_q.h>
+#include <deal.II/fe/mapping_q1.h>
+#include <deal.II/fe/mapping.h>
 
 #include <deal.II/hp/dof_handler.h>
 
@@ -95,9 +97,13 @@ namespace ForwardSolver
     // - a solution vector for the coeffs of the FE solution of the PDE
   public:
     EddyCurrent (DH &dof_handler,
-                 const FiniteElement<dim> &fe,                 
-//                  const curlFunction<dim> &boundary_function, //Check if we can remove
-                 const bool direct_solver_flag = false);
+                 const FiniteElement<dim> &fe,
+                 const bool direct_flag = false);
+    EddyCurrent (const Mapping<dim,dim> &mapping_in,
+                 DH &dof_handler,
+                 const FiniteElement<dim> &fe,
+                 const bool direct_flag = false);
+    
     ~EddyCurrent ();
     
     void assemble_matrices (const DH &dof_handler);
@@ -116,6 +122,9 @@ namespace ForwardSolver
     
     
   private:
+    void constructor_setup(DH &dof_handler,
+                           const bool direct_flag);
+    
     void compute_constraints (const DH &dof_handler,
                               const curlFunction<dim> &boundary_function);
     
@@ -124,6 +133,8 @@ namespace ForwardSolver
     unsigned int p_order;
     unsigned int quad_order;
     
+    // Mapping storage:
+    SmartPointer< const Mapping<dim> > mapping;
     
     // Block sparse storage:
     BlockSparsityPattern sparsity_pattern;
