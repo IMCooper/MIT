@@ -8,6 +8,18 @@ namespace MyVectorTools
   double calcErrorHcurlNorm(const DH &dof_handler,
                             const Vector<double> &solution,
                             const curlFunction<dim> &exact_solution)
+  {
+    // Default Q1 mapping, calls the full version below.
+    return calcErrorHcurlNorm (StaticMappingQ1<dim>::mapping,
+                               dof_handler,
+                               solution,
+                               exact_solution);
+  }
+  template<int dim, class DH>
+  double calcErrorHcurlNorm(const Mapping<dim> &mapping,
+                            const DH &dof_handler,
+                            const Vector<double> &solution,
+                            const curlFunction<dim> &exact_solution)
   { 
     const FiniteElement<dim> &fe = dof_handler.get_fe ();
     
@@ -16,7 +28,7 @@ namespace MyVectorTools
     QGauss<dim>  quadrature_formula(quad_order);
     const unsigned int n_q_points = quadrature_formula.size();    
     
-    FEValues<dim> fe_values (fe, quadrature_formula,
+    FEValues<dim> fe_values (mapping, fe, quadrature_formula,
                              update_values    |  update_gradients |
                              update_quadrature_points  |  update_JxW_values);
     
@@ -88,10 +100,29 @@ namespace MyVectorTools
   template double calcErrorHcurlNorm<>(const DoFHandler<3> &,
                                        const Vector<double> &,
                                        const curlFunction<3> &);
+  template double calcErrorHcurlNorm<>(const Mapping<3> &,
+                                       const DoFHandler<3> &,
+                                       const Vector<double> &,
+                                       const curlFunction<3> &);
 
   // Functions to return the derived values of a FE solution at a point:
   template <int dim, class DH>
   void point_gradient(const DH &dof_handler,
+                      const Vector<double> &solution,
+                      const Point<dim> &point,
+                      std::vector<Tensor<1,dim>> &gradients)
+  {
+    // Default Q1 mapping, calls the full version below.
+    point_gradient (StaticMappingQ1<dim>::mapping,
+                    dof_handler,
+                    solution,
+                    point,
+                    gradients);
+  }
+  
+  template <int dim, class DH>
+  void point_gradient(const Mapping<dim> &mapping,
+                      const DH &dof_handler,
                       const Vector<double> &solution,
                       const Point<dim> &point,
                       std::vector<Tensor<1,dim>> &gradients)
@@ -101,7 +132,6 @@ namespace MyVectorTools
     // gradients[c][d] with contain the derivative in coord direct d of the
     // c-th vector component of the vector field.
     
-    MappingQ1<dim> mapping;
     const std::pair<typename DH::active_cell_iterator, Point<dim> >
       cell_point = GridTools::find_active_cell_around_point(mapping, dof_handler, point);
     
@@ -139,9 +169,29 @@ namespace MyVectorTools
                                  const Vector<double> &,
                                  const Point<3> &,
                                  std::vector<Tensor<1,3>> &);
+  template void point_gradient<>(const Mapping<3> &,
+                                 const DoFHandler<3> &,
+                                 const Vector<double> &,
+                                 const Point<3> &,
+                                 std::vector<Tensor<1,3>> &);
   
   template <int dim, class DH>
   void point_curl (const DH &dof_handler,
+                   const Vector<double> &solution,
+                   const Point<dim> &point,
+                   Vector<double> &curl)
+  {
+    // Default Q1 mapping, calls the full version below.
+    point_curl (StaticMappingQ1<dim>::mapping,
+                dof_handler,
+                solution,
+                point,
+                curl);
+  }
+  
+  template <int dim, class DH>
+  void point_curl (const Mapping<dim> &mapping,
+                   const DH &dof_handler,
                    const Vector<double> &solution,
                    const Point<dim> &point,
                    Vector<double> &curl)
@@ -155,7 +205,6 @@ namespace MyVectorTools
     
     const unsigned int dofs_per_cell = dof_handler.get_fe().dofs_per_cell;
     
-    MappingQ<dim> mapping(2,true);
     const std::pair<typename DH::active_cell_iterator, Point<dim> >
       cell_point = GridTools::find_active_cell_around_point(mapping, dof_handler, point);
     
@@ -178,10 +227,10 @@ namespace MyVectorTools
     std::vector< Tensor<1,dim> >
       temp_curl_im(1);
       
-    /* Appears buggy:  
+    // Get curls:
     fe_values[v_re].get_function_curls(solution, temp_curl_re);
     fe_values[v_im].get_function_curls(solution, temp_curl_im);
-    */
+    /*
     std::vector<types::global_dof_index> local_dof_indices (dofs_per_cell);
     cell_point.first->get_dof_indices (local_dof_indices);
     Tensor<1,dim> curl_re;
@@ -225,20 +274,27 @@ namespace MyVectorTools
       }
       
     }
+    */
          
     for (unsigned int i=0; i<dim; ++i)
     {
-      /*
       curl(i)=temp_curl_re[0][i];
       curl(i+dim)=temp_curl_im[0][i];
-      */
+/*
       curl(i)=curl_re[i];
       curl(i+dim)=curl_im[i];
+*/
     }    
   }
   // Template instantiation:
-  template void point_curl<>(const DoFHandler<3> &,
-                             const Vector<double> &solution,
-                             const Point<3> &point,
-                             Vector<double> &curl);
+  template void point_curl<> (const DoFHandler<3> &,
+                              const Vector<double> &,
+                              const Point<3> &,
+                              Vector<double> &);
+  template void point_curl<> (const Mapping<3> &,
+                              const DoFHandler<3> &,
+                              const Vector<double> &,
+                              const Point<3> &,
+                              Vector<double> &);
+
 }
