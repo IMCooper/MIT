@@ -2156,8 +2156,10 @@ MyFE_Nedelec<dim>::update_each (const UpdateFlags flags) const
     out |= update_gradients | update_covariant_transformation;
 
   if (flags & update_hessians)
-    Assert (false, ExcNotImplemented());
-    //out |= update_hessians | update_covariant_transformation;
+  {
+//     Assert (false, ExcNotImplemented());
+    out |= update_hessians | update_covariant_transformation;
+  }
 
   return out;
 }
