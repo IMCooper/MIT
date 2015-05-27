@@ -81,9 +81,11 @@ if saveflag
     close all;
 end
 
+close all;
 clear files;
+axis='diag';
 for i=1:2
-    files{i}=strcat('newbuild/cube_yaxis_ptfield_p',num2str(i),'.out');
-    files{i+2}=strcat('newbuild/mapping2/cube_yaxis_ptfield_p',num2str(i),'.out');
+    files{i}=strcat('newbuild/cube_',axis,'axis_ptfield_p',num2str(i),'.out');
+    files{i+2}=strcat('newbuild/mapping2/cube_',axis,'axis_ptfield_p',num2str(i),'.out');
 end
 sphere_plot_results(files)
