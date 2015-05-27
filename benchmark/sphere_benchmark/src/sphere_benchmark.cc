@@ -282,10 +282,15 @@ namespace sphereBenchmark
     std::cout << "Computed solution. " << std::endl;
     
     // Output error to screen:
-    double hcurlerr = MyVectorTools::calcErrorHcurlNorm(mapping,
+    Vector<double> diff_per_cell(tria.n_active_cells());
+    VectorTools::integrate_difference(mapping, dof_handler, solution, boundary_conditions,
+                                      diff_per_cell, QGauss<dim>(2*(p_order+1)+2), VectorTools::L2_norm);
+    const double l2err = diff_per_cell.l2_norm();
+    const double hcurlerr = MyVectorTools::calcErrorHcurlNorm(mapping,
                                                         dof_handler,
                                                         solution,
                                                         boundary_conditions);
+    std::cout << "L2 Error: " << l2err << std::endl;
     std::cout << "HCurl Error: " << hcurlerr << std::endl;
     
     {
