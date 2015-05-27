@@ -241,6 +241,7 @@ namespace backgroundField
       }        
       else if (r < sphere_radius)
       {
+        // TODO: confirm this is correct
         std::complex<double> temp(0, constant_p);
         std::complex<double> sqrt_ip = sqrt(temp);
         std::complex<double> v=sqrt(temp)*r;
@@ -311,6 +312,7 @@ namespace backgroundField
       {
         for (unsigned int i=0; i<dim; ++i)
         {
+          // TODO: add the formula for the inside of the sphere.
           value_list[k](i) = 0.0;
           value_list[k](i+dim) = 0.0;
         }
