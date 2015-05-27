@@ -5,6 +5,8 @@
 #include <deal.II/grid/tria_iterator.h>
 #include <deal.II/grid/tria_boundary_lib.h>
 
+#include <deal.II/grid/manifold_lib.h>
+
 #include <all_data.h>
 #include <backgroundfield.h>
 #include <curlfunction.h>
@@ -123,6 +125,14 @@ namespace sphereBenchmark
     double tolerance = 0.065;
 //     unsigned int count =0;
 //     std::cout << MeshData::radius << std::endl;
+    
+    // First set all manifold_ids to 0 (default).
+    cell = tria.begin ();
+    for (; cell!=endc; ++cell)
+    {
+      cell->set_all_manifold_ids(0);      
+    }
+    // Now find those on the surface of the sphere.
     cell = tria.begin ();
     for (; cell!=endc; ++cell)
     {
@@ -168,8 +178,10 @@ namespace sphereBenchmark
     
     process_mesh(false);
     // Set the marked boundary to be spherical:
-    static const HyperBallBoundary<dim> sph_boundary (Point<dim> (0.0,0.0,0.0), MeshData::radius);
+//     static const HyperBallBoundary<dim> sph_boundary (Point<dim> (0.0,0.0,0.0), 0.5);
+    static const SphericalManifold<dim> sph_boundary;
     tria.set_manifold (100, sph_boundary);
+//     tria.refine_global(2);
     
     initialise_materials();    
     // TESTING
@@ -212,7 +224,10 @@ namespace sphereBenchmark
     
     // Now setup the forward problem:
     dof_handler.distribute_dofs (fe);
-    ForwardSolver::EddyCurrent<dim, DoFHandler<dim>> eddy(dof_handler,
+    const MappingQ<dim> mapping(2,true);
+//     const MappingQ1<dim> mapping;
+    ForwardSolver::EddyCurrent<dim, DoFHandler<dim>> eddy(mapping,
+                                                          dof_handler,
                                                           fe,
                                                           PreconditionerData::use_direct);
     
@@ -267,7 +282,8 @@ namespace sphereBenchmark
     std::cout << "Computed solution. " << std::endl;
     
     // Output error to screen:
-    double hcurlerr = MyVectorTools::calcErrorHcurlNorm(dof_handler,
+    double hcurlerr = MyVectorTools::calcErrorHcurlNorm(mapping,
+                                                        dof_handler,
                                                         solution,
                                                         boundary_conditions);
     std::cout << "HCurl Error: " << hcurlerr << std::endl;
@@ -275,7 +291,8 @@ namespace sphereBenchmark
     {
       std::ostringstream tmp;
       tmp << output_filename;    
-      OutputTools::output_to_vtk<dim, DoFHandler<dim>>(dof_handler,
+      OutputTools::output_to_vtk<dim, DoFHandler<dim>>(mapping,
+                                                       dof_handler,
                                                        solution,
                                                        tmp.str(),
                                                        boundary_conditions);
@@ -305,18 +322,20 @@ namespace sphereBenchmark
     std::stringstream tmp;
     tmp << output_filename << "_xaxis";
     std::string xaxis_str = tmp.str();
-    OutputTools::output_radial_values<dim> (dof_handler,
-                                       solution,
-                                       boundary_conditions,
-                                       uniform_field,
-                                       xaxis,
-                                       xaxis_str);
+    OutputTools::output_radial_values<dim> (mapping,
+                                            dof_handler,
+                                            solution,
+                                            boundary_conditions,
+                                            uniform_field,
+                                            xaxis,
+                                            xaxis_str);
     }
     {
       std::stringstream tmp;
       tmp << output_filename << "_yaxis";
       std::string yaxis_str = tmp.str();
-      OutputTools::output_radial_values<dim> (dof_handler,
+      OutputTools::output_radial_values<dim> (mapping,
+                                              dof_handler,
                                               solution,
                                               boundary_conditions,
                                               uniform_field,
@@ -327,18 +346,20 @@ namespace sphereBenchmark
       std::stringstream tmp;
       tmp << output_filename << "_zaxis";
       std::string zaxis_str = tmp.str();
-      OutputTools::output_radial_values<dim> (dof_handler,
-                                       solution,
-                                       boundary_conditions,
-                                       uniform_field,
-                                       zaxis,
-                                       zaxis_str);
+      OutputTools::output_radial_values<dim> (mapping,
+                                              dof_handler,
+                                              solution,
+                                              boundary_conditions,
+                                              uniform_field,
+                                              zaxis,
+                                              zaxis_str);
     }
     {
       std::stringstream tmp;
       tmp << output_filename << "_diagaxis";
       std::string diagaxis_str = tmp.str();
-      OutputTools::output_radial_values<dim> (dof_handler,
+      OutputTools::output_radial_values<dim> (mapping,
+                                              dof_handler,
                                               solution,
                                               boundary_conditions,
                                               uniform_field,
