@@ -37,9 +37,9 @@ for i=1:length(r)
     magHe_pt(i) = norm(He_pt(:,i));
 end
 h1=figure;
-plot(r,magHe,'LineWidth',2);
+semilogy(r,magHe,'LineWidth',2);
 h2=figure;
-plot(r,magHe_pt,'LineWidth',2);
+semilogy(r,magHe_pt,'LineWidth',2);
 
 
 magHa=zeros(length(r),length(filenames));
@@ -61,20 +61,27 @@ for f=1:length(filenames)
     % Add to plot
     figure(h1);
     hold on;
-    plot(r,magHa(:,f),line_colour{f});
+    semilogy(r,magHa(:,f),line_colour{f});
     hold off;
     figure(h2);
     hold on;
-    plot(r,magHa_pt(:,f),line_colour{f});
+    semilogy(r,magHa_pt(:,f),line_colour{f});
     hold off;
     
 end
 
+
+for i=[h1 h2]
+    figure(i);
+    
 % mesh ref:
 % legend('PT', 'M1', 'M2', 'M3', 'M4');
 
 % p-ref:
-legend('PT', 'p=0', 'p=1', 'p=2');
+% legend('PT', 'p=0', 'p=1', 'p=2');
+
+legend('PT', 'p=1, g=1', 'p=2, g=1', 'p=1, g=2', 'p=2, g=2');
+end
 
 
 end
