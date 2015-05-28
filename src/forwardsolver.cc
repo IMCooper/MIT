@@ -75,26 +75,28 @@ namespace ForwardSolver
     
     unsigned int total_dofs = dof_handler.n_dofs();
 
-    unsigned int n_lowest_order_dofs = reorder_counts[0];
-    unsigned int n_higher_order_edge_gradients_dofs = reorder_counts[1];
-    unsigned int n_higher_order_face_gradients_dofs = reorder_counts[2];
-    unsigned int n_higher_order_cell_gradients_dofs = reorder_counts[3];
-    unsigned int n_higher_order_face_nongradients_dofs = reorder_counts[4];    
-    unsigned int n_higher_order_cell_nongradients_dofs = reorder_counts[5];
+    n_lowest_order_dofs = reorder_counts[0];
+    n_higher_order_edge_gradients_dofs = reorder_counts[1];
+    n_higher_order_face_gradients_dofs = reorder_counts[2];
+    n_higher_order_cell_gradients_dofs = reorder_counts[3];
+    n_higher_order_face_nongradients_dofs = reorder_counts[4];
+    n_higher_order_cell_nongradients_dofs = reorder_counts[5];
     
-    unsigned int n_higher_order_dofs = n_higher_order_edge_gradients_dofs
-                                       + n_higher_order_face_gradients_dofs
-                                       + n_higher_order_face_nongradients_dofs
-                                       + n_higher_order_cell_gradients_dofs
-                                       + n_higher_order_cell_nongradients_dofs;
+    n_higher_order_dofs
+    = n_higher_order_edge_gradients_dofs
+    + n_higher_order_face_gradients_dofs
+    + n_higher_order_face_nongradients_dofs
+    + n_higher_order_cell_gradients_dofs
+    + n_higher_order_cell_nongradients_dofs;
 
-    const unsigned int n_higher_order_gradient_dofs
-     = n_higher_order_edge_gradients_dofs
-       + n_higher_order_face_gradients_dofs
-       + n_higher_order_cell_gradients_dofs;
-    const unsigned int n_higher_order_non_gradient_dofs
-     = n_higher_order_face_nongradients_dofs
-       + n_higher_order_cell_nongradients_dofs;
+    n_higher_order_gradient_dofs
+    = n_higher_order_edge_gradients_dofs
+    + n_higher_order_face_gradients_dofs
+    + n_higher_order_cell_gradients_dofs;
+       
+    n_higher_order_non_gradient_dofs
+    = n_higher_order_face_nongradients_dofs
+    + n_higher_order_cell_nongradients_dofs;
     
     int remaining_dofs = total_dofs
     - n_lowest_order_dofs

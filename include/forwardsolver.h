@@ -142,6 +142,19 @@ namespace ForwardSolver
     BlockVector<double> solution;
     BlockVector<double> system_rhs;
     
+    // Dof ordering storage:
+    unsigned int n_lowest_order_dofs;
+    unsigned int n_higher_order_dofs;
+    
+    unsigned int n_higher_order_edge_gradients_dofs;
+    unsigned int n_higher_order_face_gradients_dofs;
+    unsigned int n_higher_order_cell_gradients_dofs;
+    unsigned int n_higher_order_face_nongradients_dofs;
+    unsigned int n_higher_order_cell_nongradients_dofs;
+    
+    unsigned int n_higher_order_gradient_dofs;
+    unsigned int n_higher_order_non_gradient_dofs;
+    
     // Preconditioner:
     BlockSparseMatrix<double> system_preconditioner;
     // TODO: would this be better as SmartPointer<Preconditioner::EddyCurrentPreconditionerBase> preconditioner; ??
