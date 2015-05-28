@@ -93,7 +93,7 @@ namespace ForwardSolver
     = n_higher_order_edge_gradients_dofs
     + n_higher_order_face_gradients_dofs
     + n_higher_order_cell_gradients_dofs;
-       
+    
     n_higher_order_non_gradient_dofs
     = n_higher_order_face_nongradients_dofs
     + n_higher_order_cell_nongradients_dofs;
@@ -337,17 +337,18 @@ namespace ForwardSolver
     
     
     // Extractors to real and imaginary parts
+    // TODO: this would make things easier:
     const FEValuesExtractors::Vector E_re(0);
     const FEValuesExtractors::Vector E_im(dim);
+    
+    std::vector<FEValuesExtractors::Vector> vec(2);
+    vec[0] = E_re;
+    vec[1] = E_im;
     
     // Local cell storage:
     FullMatrix<double> cell_matrix (dofs_per_cell, dofs_per_cell);
     FullMatrix<double> cell_preconditioner (dofs_per_cell, dofs_per_cell);
     std::vector<types::global_dof_index> local_dof_indices (dofs_per_cell);
-    
-    // block indices:
-    unsigned int block_index_i;
-    unsigned int block_index_j;
     
     // Material parameters:
     double current_mur;
@@ -359,67 +360,170 @@ namespace ForwardSolver
     typename DH::active_cell_iterator cell, endc;
     endc = dof_handler.end();
     
-    
     cell = dof_handler.begin_active();
+    //  DEBUGGING VOLUME:
+//     double volume_mat1=0;
+//     double volume_mat0=0;
     for (; cell!=endc; ++cell)
     {
       fe_values.reinit (cell);
+      // FOR DEBUGGING: calculate volume of parts of the mesh:
+//       for (unsigned int q_point=0; q_point<n_q_points; ++q_point)
+//       {
+//         if (cell->material_id()==0)
+//         {
+//           volume_mat0+=fe_values.JxW(q_point);
+//         }
+//         if (cell->material_id()==1)
+//         {
+//           volume_mat1+=fe_values.JxW(q_point);
+//         }
+//       }
+      
       current_mur = EquationData::param_mur(cell->material_id());
       mur_inv = 1.0/current_mur;
       current_kappa_re = EquationData::param_kappa_re(cell->material_id());
       current_kappa_im = EquationData::param_kappa_im(cell->material_id());
       // for preconditioner:
       current_kappa_magnitude = sqrt(current_kappa_im*current_kappa_im + current_kappa_re*current_kappa_re);
+      
+      
+      // Store coefficients of the real/imaginary blocks:
+      std::vector<std::vector<double>> kappa_matrix(2, std::vector<double> (2));
+      kappa_matrix[0][0] = current_kappa_re;
+      kappa_matrix[0][1] = -current_kappa_im;
+      kappa_matrix[1][0] = current_kappa_im;
+      kappa_matrix[1][1] = current_kappa_re;
+      
+      std::vector<std::vector<double>> kappa_matrix_precon(2, std::vector<double> (2));
+      kappa_matrix_precon[0][0] = current_kappa_re;
+      kappa_matrix_precon[0][1] = -current_kappa_im;
+      kappa_matrix_precon[1][0] = current_kappa_im;
+      kappa_matrix_precon[1][1] = current_kappa_re;
+      
       cell_matrix = 0;
       cell_preconditioner = 0;
-            
-      // Loop over quad points:
-      for (unsigned int q_point=0; q_point<n_q_points; ++q_point)
-      { 
-        for (unsigned int i=0; i<dofs_per_cell; ++i)
-        {
-          block_index_i = fe->system_to_block_index(i).first;
-          // Construct local matrix:
-          for (unsigned int j=0; j<dofs_per_cell; ++j)
-          {
-            block_index_j = fe->system_to_block_index(j).first;
-            // block 0 = real, block 1 = imaginary.
-            if (block_index_i == block_index_j)
-            {
-              if (block_index_i == 0)
-              {
-                double curl_part = mur_inv*fe_values[E_re].curl(i,q_point)*fe_values[E_re].curl(j,q_point);
-                double mass_part = fe_values[E_re].value(i,q_point)*fe_values[E_re].value(j,q_point);
-                
-                cell_matrix(i,j) += ( curl_part + current_kappa_re*mass_part )*fe_values.JxW(q_point);
-                
-                cell_preconditioner(i,j) += ( curl_part + current_kappa_magnitude*mass_part )*fe_values.JxW(q_point);
-              }
-              else if (block_index_i == 1)
-              {
-                double curl_part = mur_inv*fe_values[E_im].curl(i,q_point)*fe_values[E_im].curl(j,q_point);
-                double mass_part = fe_values[E_im].value(i,q_point)*fe_values[E_im].value(j,q_point);
-                
-                cell_matrix(i,j) += ( curl_part + current_kappa_re*mass_part )*fe_values.JxW(q_point);
-                                      
-                cell_preconditioner(i,j) += ( curl_part + current_kappa_magnitude*mass_part )*fe_values.JxW(q_point);
-              }  
-            }
-            else
-            {
-              if (block_index_i == 0) // then block_index_j == 1
-              {
-                cell_matrix(i,j) += -current_kappa_im*fe_values[E_re].value(i,q_point)*fe_values[E_im].value(j,q_point)*fe_values.JxW(q_point);
-              }
-              else if (block_index_i == 1) // then block_index_j == 0
-              {
-                cell_matrix(i,j) += current_kappa_im*fe_values[E_im].value(i,q_point)*fe_values[E_re].value(j,q_point)*fe_values.JxW(q_point);
-              }
-            }  
-          }
-        }  
-      }
       
+      // Options for assembly
+      // TODO: decide which is quickest.
+      // ORIGINAL WAY:
+      // Loop over quad points:
+//       for (unsigned int q_point=0; q_point<n_q_points; ++q_point)
+//       {
+//         for (unsigned int i=0; i<dofs_per_cell; ++i)
+//         {
+//           const unsigned int block_index_i = fe->system_to_block_index(i).first;
+//           // Construct local matrix:
+//           for (unsigned int j=0; j<dofs_per_cell; ++j)
+//           {
+//             const unsigned int block_index_j = fe->system_to_block_index(j).first;
+//             if (block_index_i == block_index_j)
+//             {
+//               if (block_index_i == 0)
+//               {
+//                 double curl_part = mur_inv*fe_values[E_re].curl(i,q_point)*fe_values[E_re].curl(j,q_point);
+//                 double mass_part = fe_values[E_re].value(i,q_point)*fe_values[E_re].value(j,q_point);
+//                 
+//                 cell_matrix(i,j) += ( curl_part + current_kappa_re*mass_part )*fe_values.JxW(q_point);
+//                 
+//                 cell_preconditioner(i,j) += ( curl_part + current_kappa_magnitude*mass_part )*fe_values.JxW(q_point);
+//               }
+//               else if (block_index_i == 1)
+//               {
+//                 double curl_part = mur_inv*fe_values[E_im].curl(i,q_point)*fe_values[E_im].curl(j,q_point);
+//                 double mass_part = fe_values[E_im].value(i,q_point)*fe_values[E_im].value(j,q_point);
+//                 
+//                 cell_matrix(i,j) += ( curl_part + current_kappa_re*mass_part )*fe_values.JxW(q_point);
+//
+//                 cell_preconditioner(i,j) += ( curl_part + current_kappa_magnitude*mass_part )*fe_values.JxW(q_point);
+//               }  
+//             }
+//             else
+//             {
+//               if (block_index_i == 0) // then block_index_j == 1
+//               {
+//                 cell_matrix(i,j) += -current_kappa_im*fe_values[E_re].value(i,q_point)*fe_values[E_im].value(j,q_point)*fe_values.JxW(q_point);
+//               }
+//               else if (block_index_i == 1) // then block_index_j == 0
+//               {
+//                 cell_matrix(i,j) += current_kappa_im*fe_values[E_im].value(i,q_point)*fe_values[E_re].value(j,q_point)*fe_values.JxW(q_point);
+//               }
+//             }
+//           }
+//         }
+//       }
+      
+      // NEW WAY, 1: Better use of the blocks:
+      for (unsigned int i=0; i<dofs_per_cell; ++i)
+      {
+        const unsigned int block_index_i = fe->system_to_block_index(i).first;
+        // Construct local matrix:
+        for (unsigned int j=0; j<dofs_per_cell; ++j)
+        {
+          const unsigned int block_index_j = fe->system_to_block_index(j).first;
+          double mass_part = 0;
+          double curl_part = 0;
+          if (block_index_i == block_index_j)
+          {
+            for (unsigned int q_point=0; q_point<n_q_points; ++q_point)
+            {
+              curl_part
+              += fe_values[vec[block_index_i]].curl(i, q_point)
+              *fe_values[vec[block_index_j]].curl(j, q_point)
+              *fe_values.JxW(q_point);
+
+              mass_part
+              += fe_values[vec[block_index_i]].value(i, q_point)
+              *fe_values[vec[block_index_j]].value(j, q_point)
+              *fe_values.JxW(q_point);
+            }
+            cell_matrix(i,j) += mur_inv*curl_part + kappa_matrix[block_index_i][block_index_j]*mass_part;
+            
+            cell_preconditioner(i,j) += mur_inv*curl_part + kappa_matrix_precon[block_index_i][block_index_j]*mass_part;
+          }
+          else // off diagonal - curl-curl operator not needed.
+          {
+            for (unsigned int q_point=0; q_point<n_q_points; ++q_point)
+            {
+              mass_part
+              += fe_values[vec[block_index_i]].value(i,q_point)
+              *fe_values[vec[block_index_j]].value(j,q_point)
+              *fe_values.JxW(q_point);
+            }
+            cell_matrix(i,j) += kappa_matrix[block_index_i][block_index_j]*mass_part;
+            
+            cell_preconditioner(i,j) += kappa_matrix_precon[block_index_i][block_index_j]*mass_part;
+          }
+        }
+      }
+      // END NEW WAY, 1:
+      // NEW WAY, 2: Better use of the blocks and remove all IF statements:
+//       for (unsigned int i=0; i<dofs_per_cell; ++i)
+//       {
+//         const unsigned int block_index_i = fe->system_to_block_index(i).first;
+//         // Construct local matrix:
+//         for (unsigned int j=0; j<dofs_per_cell; ++j)
+//         {
+//           const unsigned int block_index_j = fe->system_to_block_index(j).first;
+//           double mass_part = 0;
+//           double curl_part = 0;
+//           for (unsigned int q_point=0; q_point<n_q_points; ++q_point)
+//           {
+//             curl_part
+//             += fe_values[vec[block_index_i]].curl(i,q_point)
+//             *fe_values[vec[block_index_j]].curl(j,q_point)
+//             *fe_values.JxW(q_point);
+// 
+//             mass_part
+//             += fe_values[vec[block_index_i]].value(i,q_point)
+//             *fe_values[vec[block_index_j]].value(j,q_point)
+//             *fe_values.JxW(q_point);
+//           }
+//           cell_matrix(i,j) += mur_inv*curl_part + kappa_matrix[block_index_i][block_index_j]*mass_part;
+//           cell_preconditioner(i,j) += ( curl_part + mass_part );
+//         }
+//       }
+      // END NEW WAY, 2
       cell->get_dof_indices (local_dof_indices);
       
       
@@ -436,6 +540,8 @@ namespace ForwardSolver
                                                system_preconditioner);
       }
     }
+    // DEBUGGING:
+//     std::cout << "Volume of 0 | 1 | 0+1 is: " << volume_mat0 << " | " << volume_mat1 << " | " << volume_mat0+volume_mat1 << std::endl;
   }
   
   // Assemble the rhs for a zero RHS
