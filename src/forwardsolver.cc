@@ -427,7 +427,7 @@ namespace ForwardSolver
       constraints.distribute_local_to_global(cell_matrix,
                                              local_dof_indices,
                                              system_matrix);
-      if (~direct)
+      if (!direct)
       {
         constraints.distribute_local_to_global(cell_preconditioner,
                                                local_dof_indices,
