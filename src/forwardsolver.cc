@@ -203,7 +203,7 @@ namespace ForwardSolver
       sparsity_pattern.copy_from(csp);
     }
     system_matrix.reinit (sparsity_pattern);
-    if (~direct)
+    if (!direct)
     {
       system_preconditioner.reinit (sparsity_pattern);
     }
@@ -269,7 +269,7 @@ namespace ForwardSolver
     // Deconstructor: need to delete the pointers to preconditioners
     // TODO: Could this be better handled with a smart pointer?
     
-    if (~direct)
+    if (!direct)
     {
       delete preconditioner;
     }
