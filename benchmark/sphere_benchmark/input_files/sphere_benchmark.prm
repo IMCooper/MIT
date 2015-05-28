@@ -119,7 +119,7 @@ end
 subsection Preconditioner Data
 
   # Enable the sparse direct solver (disables the GMRES solver)
-  set use direct = true
+  set use direct = false
 
   # SparseILU diagonal strengthening
   set diagonal strengthening = 1e6
