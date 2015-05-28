@@ -28,7 +28,8 @@ namespace sphereBenchmark
   class sphereBenchmark
   {
   public:
-    sphereBenchmark (const unsigned int order);
+    sphereBenchmark (const unsigned int poly_order,
+                     const unsigned int mapping_order = 2);
     ~sphereBenchmark ();
     void run(std::string input_filename,
              std::string output_filename);
@@ -37,18 +38,21 @@ namespace sphereBenchmark
     FESystem<dim> fe;
     DoFHandler<dim> dof_handler;
 
-    unsigned int p_order;
+    const unsigned int poly_order;
+    const unsigned int mapping_order;
     
     void initialise_materials();
     void process_mesh(bool neuman_flag);
   };
   
   template <int dim>
-  sphereBenchmark<dim>::sphereBenchmark(const unsigned int order)
+  sphereBenchmark<dim>::sphereBenchmark(const unsigned int poly_order,
+                                        const unsigned int mapping_order)
   :
-  fe (MyFE_Nedelec<dim>(order), 2),
+  fe (MyFE_Nedelec<dim>(poly_order), 2),
   dof_handler (tria),
-  p_order(order)
+  poly_order(poly_order),
+  mapping_order(mapping_order)
   {
   }
   
@@ -224,7 +228,9 @@ namespace sphereBenchmark
     
     // Now setup the forward problem:
     dof_handler.distribute_dofs (fe);
-    const MappingQ<dim> mapping(2,true);
+    
+    const MappingQ<dim> mapping(mapping_order, (mapping_order>1 ? true : false));
+
 //     const MappingQ1<dim> mapping;
     ForwardSolver::EddyCurrent<dim, DoFHandler<dim>> eddy(mapping,
                                                           dof_handler,
@@ -284,7 +290,7 @@ namespace sphereBenchmark
     // Output error to screen:
     Vector<double> diff_per_cell(tria.n_active_cells());
     VectorTools::integrate_difference(mapping, dof_handler, solution, boundary_conditions,
-                                      diff_per_cell, QGauss<dim>(2*(p_order+1)+2), VectorTools::L2_norm);
+                                      diff_per_cell, QGauss<dim>(2*(poly_order+1)+2), VectorTools::L2_norm);
     const double l2err = diff_per_cell.l2_norm();
     const double hcurlerr = MyVectorTools::calcErrorHcurlNorm(mapping,
                                                         dof_handler,
@@ -428,7 +434,7 @@ namespace sphereBenchmark
       
       // output to file:
       std::ostringstream tmp;
-      tmp << output_filename << "_ptfield_p" << p_order << ".out";
+      tmp << output_filename << "_ptfield_p" << poly_order << ".out";
       std::ofstream file(tmp.str());
       file.precision(32);
       for (unsigned int i=0; i<measurement_points.size(); ++i)
@@ -482,7 +488,8 @@ int main (int argc, char* argv[])
   unsigned int dim = 3;
   // Set default input:
   unsigned int p_order = 0;
-  std::string output_filename = "cube";
+  unsigned int mapping_order = 1;
+  std::string output_filename = "sphere";
   std::string input_filename = "../input_files/sphere_benchmark.prm";
   
   // Allow for input from command line:
@@ -498,6 +505,12 @@ int main (int argc, char* argv[])
           std::stringstream strValue;
           strValue << argv[i+1];
           strValue >> p_order;
+        }
+        if (input == "-m")
+        {
+          std::stringstream strValue;
+          strValue << argv[i+1];
+          strValue >> mapping_order;
         }
         if (input == "-i")
         {
@@ -518,7 +531,8 @@ int main (int argc, char* argv[])
   std::ofstream deallog_file(deallog_filename.str());
   deallog.attach(deallog_file);
   
-  sphereBenchmark::sphereBenchmark<3> eddy_voltages(p_order);
+  sphereBenchmark::sphereBenchmark<3> eddy_voltages(p_order,
+                                                    mapping_order);
   eddy_voltages.run(input_filename,
                     output_filename);
   
