@@ -78,7 +78,7 @@ for i=[h1 h2]
 % legend('PT', 'M1', 'M2', 'M3', 'M4');
 
 % p-ref:
-% legend('PT', 'p=0', 'p=1', 'p=2');
+% legend('PT', 'p=0', 'p=1', 'p=2', 'p=3');
 
 legend('PT', 'p=1, g=1', 'p=2, g=1', 'p=1, g=2', 'p=2, g=2');
 end
