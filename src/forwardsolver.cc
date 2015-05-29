@@ -467,6 +467,7 @@ namespace ForwardSolver
     for (; cell!=endc; ++cell)
     {
       fe_values.reinit (cell);
+      cell->get_dof_indices (local_dof_indices);
       // FOR DEBUGGING: calculate volume of parts of the mesh:
 //       for (unsigned int q_point=0; q_point<n_q_points; ++q_point)
 //       {
@@ -556,43 +557,49 @@ namespace ForwardSolver
       // NEW WAY, 1: Better use of the blocks:
       for (unsigned int i=0; i<dofs_per_cell; ++i)
       {
-        const unsigned int block_index_i = fe->system_to_block_index(i).first;
-        // Construct local matrix:
-        for (unsigned int j=0; j<dofs_per_cell; ++j)
+        if (!constraints.is_constrained(local_dof_indices[i]))
         {
-          const unsigned int block_index_j = fe->system_to_block_index(j).first;
-          double mass_part = 0;
-          double curl_part = 0;
-          if (block_index_i == block_index_j)
+          const unsigned int block_index_i = fe->system_to_block_index(i).first;
+          // Construct local matrix:
+          for (unsigned int j=0; j<dofs_per_cell; ++j)
           {
-            for (unsigned int q_point=0; q_point<n_q_points; ++q_point)
+            if (!constraints.is_constrained(local_dof_indices[j]))
             {
-              curl_part
-              += fe_values[vec[block_index_i]].curl(i, q_point)
-              *fe_values[vec[block_index_j]].curl(j, q_point)
-              *fe_values.JxW(q_point);
-
-              mass_part
-              += fe_values[vec[block_index_i]].value(i, q_point)
-              *fe_values[vec[block_index_j]].value(j, q_point)
-              *fe_values.JxW(q_point);
+              const unsigned int block_index_j = fe->system_to_block_index(j).first;
+              double mass_part = 0;
+              double curl_part = 0;
+              if (block_index_i == block_index_j)
+              {
+                for (unsigned int q_point=0; q_point<n_q_points; ++q_point)
+                {
+                  curl_part
+                  += fe_values[vec[block_index_i]].curl(i, q_point)
+                  *fe_values[vec[block_index_j]].curl(j, q_point)
+                  *fe_values.JxW(q_point);
+                  
+                  mass_part
+                  += fe_values[vec[block_index_i]].value(i, q_point)
+                  *fe_values[vec[block_index_j]].value(j, q_point)
+                  *fe_values.JxW(q_point);
+                }
+                cell_matrix(i,j) += mur_inv*curl_part + kappa_matrix[block_index_i][block_index_j]*mass_part;
+                
+                cell_preconditioner(i,j) += mur_inv*curl_part + kappa_matrix_precon[block_index_i][block_index_j]*mass_part;
+              }
+              else // off diagonal - curl-curl operator not needed.
+              {
+                for (unsigned int q_point=0; q_point<n_q_points; ++q_point)
+                {
+                  mass_part
+                  += fe_values[vec[block_index_i]].value(i,q_point)
+                  *fe_values[vec[block_index_j]].value(j,q_point)
+                  *fe_values.JxW(q_point);
+                }
+                cell_matrix(i,j) += kappa_matrix[block_index_i][block_index_j]*mass_part;
+                
+                cell_preconditioner(i,j) += kappa_matrix_precon[block_index_i][block_index_j]*mass_part;
+              }
             }
-            cell_matrix(i,j) += mur_inv*curl_part + kappa_matrix[block_index_i][block_index_j]*mass_part;
-            
-            cell_preconditioner(i,j) += mur_inv*curl_part + kappa_matrix_precon[block_index_i][block_index_j]*mass_part;
-          }
-          else // off diagonal - curl-curl operator not needed.
-          {
-            for (unsigned int q_point=0; q_point<n_q_points; ++q_point)
-            {
-              mass_part
-              += fe_values[vec[block_index_i]].value(i,q_point)
-              *fe_values[vec[block_index_j]].value(j,q_point)
-              *fe_values.JxW(q_point);
-            }
-            cell_matrix(i,j) += kappa_matrix[block_index_i][block_index_j]*mass_part;
-            
-            cell_preconditioner(i,j) += kappa_matrix_precon[block_index_i][block_index_j]*mass_part;
           }
         }
       }
@@ -624,8 +631,6 @@ namespace ForwardSolver
 //         }
 //       }
       // END NEW WAY, 2
-      cell->get_dof_indices (local_dof_indices);
-      
       
       // Distribute & constraint to global matrices:
       // Note: need to apply RHS constraints using the columns of their
