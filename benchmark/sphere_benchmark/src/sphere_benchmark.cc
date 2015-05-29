@@ -250,10 +250,6 @@ namespace sphereBenchmark
     std::cout << "Initialising Solver..." << std::endl;
     eddy.initialise_solver();
     std::cout << "Solver initialisation complete. " << std::endl;
-
-    // Now solve for each excitation coil:
-    std::cout << "Solving... " << std::endl;
-    Vector<double> solution;
     
     // construct RHS for this field:
     Vector<double> uniform_field(dim+dim);
@@ -279,9 +275,13 @@ namespace sphereBenchmark
     */
     
     // assemble rhs
+    std::cout << "Assembling System RHS...." << std::endl;
     eddy.assemble_rhs(dof_handler,
                       boundary_conditions);
+    std::cout << "Matrix RHS complete. " << std::endl;
     
+    std::cout << "Solving... " << std::endl;
+    Vector<double> solution;
     // solve system & storage in the vector of solutions:
     eddy.solve(solution);
 
@@ -511,6 +511,11 @@ int main (int argc, char* argv[])
           std::stringstream strValue;
           strValue << argv[i+1];
           strValue >> mapping_order;
+          if (mapping_order < 1)
+          {
+            std::cout << "ERROR: mapping order must be > 0" << std::endl;
+            return 1;
+          }
         }
         if (input == "-i")
         {
