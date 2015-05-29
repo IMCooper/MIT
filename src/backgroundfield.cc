@@ -152,9 +152,9 @@ namespace backgroundField
        constant_D = pow(sphere_radius,3)*( (2.0*mu_c + mu_n)*v*besselhalf_minus - (mu_n*(1.0+v*v) + 2.0*mu_c)*besselhalf_plus )
                     / ( (mu_c - mu_n)*v*besselhalf_minus + (mu_n*(1.0+v*v)-mu_c)*besselhalf_plus );
     }
-                    
-    std::cout << constant_C.real() << " + "<<constant_C.imag() << "i" << std::endl;
-    std::cout << constant_D.real() << " + "<<constant_D.imag() << "i" << std::endl;
+    // Debugging (can compare to matlab code)
+//     std::cout << constant_C.real() << " + "<<constant_C.imag() << "i" << std::endl;
+//     std::cout << constant_D.real() << " + "<<constant_D.imag() << "i" << std::endl;
   }
   
   template <int dim>
