@@ -73,8 +73,6 @@ namespace ForwardSolver
     std::vector<unsigned int> reorder_counts;
     MyDoFRenumbering::by_dimension<dim, DoFHandler<dim>>(dof_handler, reorder_counts);
     
-    unsigned int total_dofs = dof_handler.n_dofs();
-
     n_lowest_order_dofs = reorder_counts[0];
     n_higher_order_edge_gradients_dofs = reorder_counts[1];
     n_higher_order_face_gradients_dofs = reorder_counts[2];
@@ -98,7 +96,7 @@ namespace ForwardSolver
     = n_higher_order_face_nongradients_dofs
     + n_higher_order_cell_nongradients_dofs;
     
-    int remaining_dofs = total_dofs
+    int remaining_dofs = dof_handler.n_dofs();
     - n_lowest_order_dofs
     - n_higher_order_edge_gradients_dofs
     - n_higher_order_face_gradients_dofs
@@ -108,7 +106,7 @@ namespace ForwardSolver
     
     if (remaining_dofs !=0)
     {
-      std::cout << std::endl << "WARNING! Renumbering did not find all DoFs! " << remaining_dofs " were not renumbered." << std::endl;
+      std::cout << std::endl << "WARNING! Renumbering did not find all DoFs! " << remaining_dofs << " were not renumbered." << std::endl;
     }
     
     // Setup initial constraints in order to pre-construct the sparsity pattern:
