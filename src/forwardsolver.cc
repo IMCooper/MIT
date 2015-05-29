@@ -96,7 +96,7 @@ namespace ForwardSolver
     = n_higher_order_face_nongradients_dofs
     + n_higher_order_cell_nongradients_dofs;
     
-    int remaining_dofs = dof_handler.n_dofs();
+    int remaining_dofs = dof_handler.n_dofs()
     - n_lowest_order_dofs
     - n_higher_order_edge_gradients_dofs
     - n_higher_order_face_gradients_dofs
