@@ -105,9 +105,10 @@ namespace ForwardSolver
     - n_higher_order_face_nongradients_dofs
     - n_higher_order_cell_gradients_dofs
     - n_higher_order_cell_nongradients_dofs;
+    
     if (remaining_dofs !=0)
     {
-      std::cout << std::endl << "WARNING! Renumbering did not find all DoFs!" << std::endl;
+      std::cout << std::endl << "WARNING! Renumbering did not find all DoFs! " << remaining_dofs " were not renumbered." << std::endl;
     }
     
     // Setup initial constraints in order to pre-construct the sparsity pattern:
@@ -133,6 +134,56 @@ namespace ForwardSolver
                                                              0,
                                                              constraints,
                                                              *mapping);
+
+    // Add constraints on gradient-based DoFs outside of the conducting region,
+    // i.e. in cells with material_id 0.
+    // These DoFs are automatically zero in this region because the curl-curl operator
+    // applied to a gradient-based DoF is zero and the coefficient of the mass operator
+    // is effectively zero.
+    // Note: we must avoid constraining DoFs on the suface of the conductor, so first
+    // we make a list of DoFs inside the conductor
+    if (p_order > 0)
+    {
+      std::vector<bool> dof_in_conductor (dof_handler.n_dofs());
+      std::vector<types::global_dof_index> local_dof_indices (fe->dofs_per_cell);
+      
+      typename DoFHandler<dim>::active_cell_iterator cell, endc;
+      endc = dof_handler.end();
+      cell = dof_handler.begin_active();
+      
+      for (;cell!=endc; ++cell)
+      {
+        // TODO: update with the conductor material id from stored data.
+        if (cell->material_id() == 0)
+        {
+          cell->get_dof_indices (local_dof_indices);
+          for (unsigned int i = 0; i<fe->dofs_per_cell; ++i)
+          {
+            dof_in_conductor[local_dof_indices[i]] = true;
+          }
+        }
+      }
+      // Now loop through all cells in the non-conducting region and set gradient DoFs to be zero,
+      // on the condition that they are not flagged by dof_in_conductor.
+      cell = dof_handler.begin_active();
+      for (;cell!=endc; ++cell)
+      {
+        // TODO: update with the conductor material id from stored data.
+        if (cell->material_id() == 1)
+        {
+          cell->get_dof_indices (local_dof_indices);
+          for (unsigned int i = 0; i<fe->dofs_per_cell; ++i)
+          {
+            if (local_dof_indices[i] >= n_lowest_order_dofs
+              && local_dof_indices[i] < n_higher_order_gradient_dofs
+              && !dof_in_conductor[local_dof_indices[i]])
+            {
+              constraints.add_line(local_dof_indices[i]);
+            }
+          }
+        }
+      }
+    }
     
     constraints.close ();
 
@@ -311,6 +362,57 @@ namespace ForwardSolver
                                                              0,
                                                              constraints,
                                                              *mapping);
+    
+    // Add constraints on gradient-based DoFs outside of the conducting region,
+    // i.e. in cells with material_id 0.
+    // These DoFs are automatically zero in this region because the curl-curl operator
+    // applied to a gradient-based DoF is zero and the coefficient of the mass operator
+    // is effectively zero.
+    // Note: we must avoid constraining DoFs on the suface of the conductor, so first
+    // we make a list of DoFs inside the conductor
+    if (p_order > 0)
+    {
+      std::vector<bool> dof_in_conductor (dof_handler.n_dofs());
+      std::vector<types::global_dof_index> local_dof_indices (fe->dofs_per_cell);
+      
+      typename DoFHandler<dim>::active_cell_iterator cell, endc;
+      endc = dof_handler.end();
+      cell = dof_handler.begin_active();
+      
+      for (;cell!=endc; ++cell)
+      {
+        // TODO: update with the conductor material id from stored data.
+        if (cell->material_id() == 0)
+        {
+          cell->get_dof_indices (local_dof_indices);
+          for (unsigned int i = 0; i<fe->dofs_per_cell; ++i)
+          {
+            dof_in_conductor[local_dof_indices[i]] = true;
+          }
+        }
+      }
+      // Now loop through all cells in the non-conducting region and set gradient DoFs to be zero,
+      // on the condition that they are not flagged by dof_in_conductor.
+      cell = dof_handler.begin_active();
+      for (;cell!=endc; ++cell)
+      {
+        // TODO: update with the conductor material id from stored data.
+        if (cell->material_id() == 1)
+        {
+          cell->get_dof_indices (local_dof_indices);
+          for (unsigned int i = 0; i<fe->dofs_per_cell; ++i)
+          {
+            if (local_dof_indices[i] >= n_lowest_order_dofs
+              && local_dof_indices[i] < n_higher_order_gradient_dofs
+              && !dof_in_conductor[local_dof_indices[i]])
+            {
+              constraints.add_line(local_dof_indices[i]);
+            }
+          }
+        }
+      }
+    }
+    
     constraints.close ();
     
   }
