@@ -655,7 +655,11 @@ namespace ForwardSolver
   void EddyCurrent<dim, DH>::assemble_rhs (const DH &dof_handler,
                                            const curlFunction<dim> &boundary_function)
   {
-    // Function to assemble the RHS for a given boundary function.
+    // NOTE: This function assumes that the RHS function is zero.
+    //       There is another version below which handles a non-zero RHS.
+    //
+    // Function to assemble the RHS for a given boundary_function,
+    // which implements dirichlet and/or neumann conditions.
     // 
     // It first updates the constraints and then computes the RHS.
     //
@@ -691,14 +695,14 @@ namespace ForwardSolver
     const FEValuesExtractors::Vector E_re(0);
     const FEValuesExtractors::Vector E_im(dim);
     
+    std::vector<FEValuesExtractors::Vector> vec(2);
+    vec[0] = E_re;
+    vec[1] = E_im;
+    
     // Local cell storage:
     Vector<double> cell_rhs (dofs_per_cell);
     std::vector<types::global_dof_index> local_dof_indices (dofs_per_cell);
     FullMatrix<double> cell_matrix(dofs_per_cell, dofs_per_cell);
-    
-    // block indices:
-    unsigned int block_index_i;
-    unsigned int block_index_j;
     
     // Material parameters:
     double current_mur;
@@ -706,18 +710,13 @@ namespace ForwardSolver
     double current_kappa_re;
     double current_kappa_im;
     
-    //RHS storage:
-    std::vector<Vector<double> > rhs_value_list(n_q_points, Vector<double>(fe->n_components()));
-    Tensor<1,dim> rhs_value_re;
-    Tensor<1,dim> rhs_value_im;
-    
     // Neumann storage
-    std::vector<Vector<double> > neumann_value_list(n_face_q_points, Vector<double>(fe->n_components()));
-    Tensor<1,dim> neumann_value_re(dim);
-    Tensor<1,dim> neumann_value_im(dim);
+    std::vector< Vector<double> > neumann_value_list(n_face_q_points, Vector<double>(fe->n_components()));
+
     Tensor<1,dim> normal_vector;
-    Tensor<1,dim> crossproduct_re(dim);
-    Tensor<1,dim> crossproduct_im(dim);
+    // Storage for both real/imag parts, 0 = re, 1 = im.
+    std::vector< Tensor<1,dim> > neumann_value(2);
+    std::vector< Tensor<1,dim> > crossproduct_result(2);
     
     typename DoFHandler<dim>::active_cell_iterator
     cell = dof_handler.begin_active(),
@@ -729,6 +728,13 @@ namespace ForwardSolver
       mur_inv = 1.0/current_mur;
       current_kappa_re = EquationData::param_kappa_re(cell->material_id());
       current_kappa_im = EquationData::param_kappa_im(cell->material_id());
+      // Store coefficients of the real/imaginary blocks:
+      std::vector<std::vector<double>> kappa_matrix(2, std::vector<double> (2));
+      kappa_matrix[0][0] = current_kappa_re;
+      kappa_matrix[0][1] = -current_kappa_im;
+      kappa_matrix[1][0] = current_kappa_im;
+      kappa_matrix[1][1] = current_kappa_re;
+      
       // Loop over faces for neumann condition:
       for (unsigned int face_number=0; face_number<GeometryInfo<dim>::faces_per_cell; ++face_number)
       {
@@ -744,36 +750,31 @@ namespace ForwardSolver
           // so (1/mur)*curl(E) = mu_0*H/(i*omega). (1/i = -i)
           // i.e. we use the imaginary part of H for real curl E and real for imag curl E.
           //      and must multiply the imag part by -1.
-          
-          // TODO: This is likely to cause problems - May need to separate to a neumann and dirichlet function.
-          // For now, we've defined a derived Function class, curlFunction.
-          // This seems to get around problems with adding the curl to a Function class.
-          
-          // NOTE: Have reversed the switching of re and im parts.. was causing issues when using the
-          // A formulation properly this needs to be clarified fully and sorted out when I create the definitive version of this
-          // class.
+
           boundary_function.curl_value_list(fe_face_values.get_quadrature_points(), neumann_value_list);
           for (unsigned int q_point=0; q_point<n_face_q_points; ++q_point)
           {
-            for (unsigned int component=0; component<dim; component++)
+            for (unsigned int d=0; d<dim; ++d)
             {
-              neumann_value_re[component] = neumann_value_list[q_point](component);
-              neumann_value_im[component] = neumann_value_list[q_point](component+dim);
-              normal_vector[component] = fe_face_values.normal_vector(q_point)(component);
+              neumann_value[0][d] = neumann_value_list[q_point](d);
+              neumann_value[1][d] = neumann_value_list[q_point](d+dim);
+              normal_vector[d] = fe_face_values.normal_vector(q_point)(d);
             }
-            cross_product(crossproduct_re, normal_vector, neumann_value_re);
-            cross_product(crossproduct_im, normal_vector, neumann_value_im);
+            
+            for (unsigned int b=0; b<2; ++b)
+            {
+              cross_product(crossproduct_result[b], normal_vector, neumann_value[b]);
+            }
+            
             for (unsigned int i=0; i<dofs_per_cell; ++i)
             {
-              block_index_i = fe->system_to_block_index(i).first;
-              if (block_index_i == 0) // then block_index_j == 1
-              {
-                cell_rhs(i) += -mur_inv*(crossproduct_re*fe_face_values[E_re].value(i,q_point)*fe_face_values.JxW(q_point));
-              }
-              else
-              {
-                cell_rhs(i) += -mur_inv*(crossproduct_im*fe_face_values[E_im].value(i,q_point)*fe_face_values.JxW(q_point));
-              }
+              const unsigned int block_index_i = fe->system_to_block_index(i).first;
+              
+              cell_rhs(i)
+              -= mur_inv
+              *crossproduct_result[block_index_i]
+              *fe_face_values[vec[block_index_i]].value(i,q_point)
+              *fe_face_values.JxW(q_point);
             }
           }
         }
@@ -788,46 +789,46 @@ namespace ForwardSolver
       for (unsigned int j=0; j<dofs_per_cell; ++j)
       {
         // Check each column to see if it corresponds to a constrained DoF:
-        if (constraints.is_constrained(local_dof_indices[j]))
+        if ( constraints.is_constrained(local_dof_indices[j]) )
         {
-          block_index_j = fe->system_to_block_index(j).first;
+          const unsigned int block_index_j = fe->system_to_block_index(j).first;
           // If yes, cycle through all rows to fill the column:
           for (unsigned int i=0; i<dofs_per_cell; ++i)
           {
-            block_index_i = fe->system_to_block_index(i).first;
-            for (unsigned int q_point=0; q_point<n_q_points; ++q_point)
+            const unsigned int block_index_i = fe->system_to_block_index(i).first;
+            
+            double curl_part = 0;
+            double mass_part = 0;
+            if (block_index_i == block_index_j)
             {
-              // block 0 = real, block 1 = imaginary.
-              if (block_index_i == block_index_j)
+              for (unsigned int q_point=0; q_point<n_q_points; ++q_point)
               {
-                if (block_index_i == 0)
-                {
-                  cell_matrix(i,j) += (  mur_inv*fe_values[E_re].curl(i,q_point)*fe_values[E_re].curl(j,q_point) 
-                                       + current_kappa_re*fe_values[E_re].value(i,q_point)*fe_values[E_re].value(j,q_point)
-                                      )*fe_values.JxW(q_point);
-                }
-                else if (block_index_i == 1)
-                {
-                  cell_matrix(i,j) += (  mur_inv*fe_values[E_im].curl(i,q_point)*fe_values[E_im].curl(j,q_point)
-                                       + current_kappa_re*fe_values[E_im].value(i,q_point)*fe_values[E_im].value(j,q_point)
-                                      )*fe_values.JxW(q_point);
-                }
+                curl_part
+                += fe_values[vec[block_index_i]].curl(i, q_point)
+                *fe_values[vec[block_index_j]].curl(j, q_point)
+                *fe_values.JxW(q_point);
+                  
+                mass_part
+                += fe_values[vec[block_index_i]].value(i, q_point)
+                *fe_values[vec[block_index_j]].value(j, q_point)
+                *fe_values.JxW(q_point);
               }
-              else // block_index_i != block_index_j
+              cell_matrix(i,j) += mur_inv*curl_part + kappa_matrix[block_index_i][block_index_j]*mass_part;
+            }
+            else // off diagonal - curl-curl operator not needed.
+            {
+              for (unsigned int q_point=0; q_point<n_q_points; ++q_point)
               {
-                if (block_index_i == 0) // then block_index_j == 1
-                {
-                  cell_matrix(i,j) += -current_kappa_im*fe_values[E_re].value(i,q_point)*fe_values[E_im].value(j,q_point)*fe_values.JxW(q_point);                 
-                }
-                else if (block_index_i == 1) // then block_index_j == 0
-                {
-                  cell_matrix(i,j) += current_kappa_im*fe_values[E_im].value(i,q_point)*fe_values[E_re].value(j,q_point)*fe_values.JxW(q_point);
-                }
-              }  
-            }              
+                mass_part
+                += fe_values[vec[block_index_i]].value(i,q_point)
+                *fe_values[vec[block_index_j]].value(j,q_point)
+                *fe_values.JxW(q_point);
+              }
+              cell_matrix(i,j) += kappa_matrix[block_index_i][block_index_j]*mass_part;
+            }
           }
         }
-      }      
+      }
       // Use the cell matrix constructed for the constrained DoF columns
       // to add the local contribution to the global RHS:
       constraints.distribute_local_to_global(cell_rhs, local_dof_indices, system_rhs, cell_matrix);      
@@ -875,14 +876,14 @@ namespace ForwardSolver
     const FEValuesExtractors::Vector E_re(0);
     const FEValuesExtractors::Vector E_im(dim);
     
+    std::vector<FEValuesExtractors::Vector> vec(2);
+    vec[0] = E_re;
+    vec[1] = E_im;
+    
     // Local cell storage:
     Vector<double> cell_rhs (dofs_per_cell);
     std::vector<types::global_dof_index> local_dof_indices (dofs_per_cell);
     FullMatrix<double> cell_matrix(dofs_per_cell, dofs_per_cell);
-    
-    // block indices:
-    unsigned int block_index_i;
-    unsigned int block_index_j;
     
     // Material parameters:
     double current_mur;
@@ -892,17 +893,15 @@ namespace ForwardSolver
     
     //RHS storage:
     std::vector<Vector<double> > rhs_value_list(n_q_points, Vector<double>(fe->n_components()));
-    Tensor<1,dim> rhs_value_re;
-    Tensor<1,dim> rhs_value_im;
-    
+    std::vector< Tensor<1,dim> > rhs_value(2);
+
     // Neumann storage
-    std::vector<Vector<double> > neumann_value_list(n_face_q_points, Vector<double>(fe->n_components()));
-    Tensor<1,dim> neumann_value_re(dim);
-    Tensor<1,dim> neumann_value_im(dim);
+    std::vector< Vector<double> > neumann_value_list(n_face_q_points, Vector<double>(fe->n_components()));
+
     Tensor<1,dim> normal_vector;
-    Tensor<1,dim> crossproduct_re(dim);
-    Tensor<1,dim> crossproduct_im(dim);
-    
+    std::vector< Tensor<1,dim> > neumann_value(2);
+    std::vector< Tensor<1,dim> > crossproduct_result(2);
+
     typename DoFHandler<dim>::active_cell_iterator
     cell = dof_handler.begin_active(),
     endc = dof_handler.end();
@@ -913,6 +912,13 @@ namespace ForwardSolver
       mur_inv = 1.0/current_mur;
       current_kappa_re = EquationData::param_kappa_re(cell->material_id());
       current_kappa_im = EquationData::param_kappa_im(cell->material_id());
+      // Store coefficients of the real/imaginary blocks:
+      std::vector<std::vector<double>> kappa_matrix(2, std::vector<double> (2));
+      kappa_matrix[0][0] = current_kappa_re;
+      kappa_matrix[0][1] = -current_kappa_im;
+      kappa_matrix[1][0] = current_kappa_im;
+      kappa_matrix[1][1] = current_kappa_re;
+      
       // Loop over faces for neumann condition:
       for (unsigned int face_number=0; face_number<GeometryInfo<dim>::faces_per_cell; ++face_number)
       {
@@ -939,31 +945,30 @@ namespace ForwardSolver
           boundary_function.curl_value_list(fe_face_values.get_quadrature_points(), neumann_value_list);
           for (unsigned int q_point=0; q_point<n_face_q_points; ++q_point)
           {
-            for (unsigned int component=0; component<dim; component++)
+            for (unsigned int d=0; d<dim; ++d)
             {
-              neumann_value_re[component] = neumann_value_list[q_point](component);
-              neumann_value_im[component] = neumann_value_list[q_point](component+dim);
-              normal_vector[component] = fe_face_values.normal_vector(q_point)(component);
+              neumann_value[0][d] = neumann_value_list[q_point](d);
+              neumann_value[1][d] = neumann_value_list[q_point](d+dim);
+              normal_vector[d] = fe_face_values.normal_vector(q_point)(d);
             }
-            cross_product(crossproduct_re, normal_vector, neumann_value_re);
-            cross_product(crossproduct_im, normal_vector, neumann_value_im);
+            for (unsigned int b=0; b<2; ++b)
+            {
+              cross_product(crossproduct_result[b], normal_vector, neumann_value[b]);
+            }
+            
             for (unsigned int i=0; i<dofs_per_cell; ++i)
             {
-              block_index_i = fe->system_to_block_index(i).first;
-              if (block_index_i == 0) // then block_index_j == 1
-              {
-                cell_rhs(i) += -mur_inv*(crossproduct_re*fe_face_values[E_re].value(i,q_point)*fe_face_values.JxW(q_point));
-              }
-              else
-              {
-                cell_rhs(i) += -mur_inv*(crossproduct_im*fe_face_values[E_im].value(i,q_point)*fe_face_values.JxW(q_point));
-              }
+              const unsigned int block_index_i = fe->system_to_block_index(i).first;
+              
+              cell_rhs(i)
+              -= mur_inv
+              *crossproduct_result[block_index_i]
+              *fe_face_values[vec[block_index_i]].value(i,q_point)
+              *fe_face_values.JxW(q_point);
             }
           }
         }
       }
-      cell_matrix = 0;
-      cell->get_dof_indices (local_dof_indices);
       
       // Create the columns of the local matrix which belong to a constrained
       // DoF. These are all that are needed to apply the constraints to the RHS
@@ -975,67 +980,65 @@ namespace ForwardSolver
       {
         for (unsigned int d=0; d<dim; ++d)
         {
-          rhs_value_re[d] = rhs_value_list[q_point](d);
-          rhs_value_im[d] = rhs_value_list[q_point](d+dim);
+          rhs_value[0][d] = rhs_value_list[q_point](d);
+          rhs_value[1][d] = rhs_value_list[q_point](d+dim);
         }
-        for (unsigned int j=0; j<dofs_per_cell; ++j)
+        for (unsigned int i=0; i<dofs_per_cell; ++i)
         {
-          block_index_j = fe->system_to_block_index(j).first;
-          // block 0 = real, block 1 = imaginary.
-          if (block_index_j == 0)
-          {
-            cell_rhs(j) += rhs_value_re*fe_values[E_re].value(j,q_point)*fe_values.JxW(q_point);
-          }
-          else // block_index_j ==1
-          {
-            cell_rhs(j) += rhs_value_im*fe_values[E_im].value(j,q_point)*fe_values.JxW(q_point);
-          }
+          const unsigned int block_index_i = fe->system_to_block_index(i).first;
+          
+          cell_rhs(i)
+          += rhs_value[block_index_i]
+          *fe_values[vec[block_index_i]].value(i,q_point)
+          *fe_values.JxW(q_point);
         }
       }
       
+      cell_matrix = 0;
+      cell->get_dof_indices (local_dof_indices);
       for (unsigned int j=0; j<dofs_per_cell; ++j)
       {
         // Check each column to see if it corresponds to a constrained DoF:
-        if (constraints.is_constrained(local_dof_indices[j]))
+        if ( constraints.is_constrained(local_dof_indices[j]) )
         {
-          block_index_j = fe->system_to_block_index(j).first;
+          const unsigned int block_index_j = fe->system_to_block_index(j).first;
           // If yes, cycle through all rows to fill the column:
           for (unsigned int i=0; i<dofs_per_cell; ++i)
           {
-            block_index_i = fe->system_to_block_index(i).first;
-            for (unsigned int q_point=0; q_point<n_q_points; ++q_point)
+            const unsigned int  block_index_i = fe->system_to_block_index(i).first;
+
+            double curl_part = 0;
+            double mass_part = 0;
+            if (block_index_i == block_index_j)
             {
-              // block 0 = real, block 1 = imaginary.
-              if (block_index_i == block_index_j)
+              for (unsigned int q_point=0; q_point<n_q_points; ++q_point)
               {
-                if (block_index_i == 0)
-                {
-                  cell_matrix(i,j) += (  mur_inv*fe_values[E_re].curl(i,q_point)*fe_values[E_re].curl(j,q_point) 
-                                       + current_kappa_re*fe_values[E_re].value(i,q_point)*fe_values[E_re].value(j,q_point)
-                                      )*fe_values.JxW(q_point);
-                }
-                else if (block_index_i == 1)
-                {
-                  cell_matrix(i,j) += (  mur_inv*fe_values[E_im].curl(i,q_point)*fe_values[E_im].curl(j,q_point)
-                                       + current_kappa_re*fe_values[E_im].value(i,q_point)*fe_values[E_im].value(j,q_point)
-                                      )*fe_values.JxW(q_point);
-                }
+                curl_part
+                += fe_values[vec[block_index_i]].curl(i, q_point)
+                *fe_values[vec[block_index_j]].curl(j, q_point)
+                *fe_values.JxW(q_point);
+                  
+                mass_part
+                += fe_values[vec[block_index_i]].value(i, q_point)
+                *fe_values[vec[block_index_j]].value(j, q_point)
+                *fe_values.JxW(q_point);
               }
-              else // block_index_i != block_index_j
+              cell_matrix(i,j) += mur_inv*curl_part + kappa_matrix[block_index_i][block_index_j]*mass_part;
+            }
+            else
+            {
+              for (unsigned int q_point=0; q_point<n_q_points; ++q_point)
               {
-                if (block_index_i == 0) // then block_index_j == 1
-                {
-                  cell_matrix(i,j) += -current_kappa_im*fe_values[E_re].value(i,q_point)*fe_values[E_im].value(j,q_point)*fe_values.JxW(q_point);                 
-                }
-                else if (block_index_i == 1) // then block_index_j == 0
-                {
-                  cell_matrix(i,j) += current_kappa_im*fe_values[E_im].value(i,q_point)*fe_values[E_re].value(j,q_point)*fe_values.JxW(q_point);
-                }
-              }  
-            }              
+                mass_part
+                += fe_values[vec[block_index_i]].value(i,q_point)
+                *fe_values[vec[block_index_j]].value(j,q_point)
+                *fe_values.JxW(q_point);
+              }
+              cell_matrix(i,j) += kappa_matrix[block_index_i][block_index_j]*mass_part;
+            }
           }
         }
-      }      
+      }
       // Use the cell matrix constructed for the constrained DoF columns
       // to add the local contribution to the global RHS:
       constraints.distribute_local_to_global(cell_rhs, local_dof_indices, system_rhs, cell_matrix);      
