@@ -1107,7 +1107,7 @@ namespace ForwardSolver
     {
       /*GMRES*/        
       SolverControl solver_control (system_matrix.m(),
-                                    1e-6*system_rhs.l2_norm(),
+                                    1e-8*system_rhs.l2_norm(),
                                     true, true); // Add to see residual history
       
       GrowingVectorMemory<BlockVector<double> > vector_memory;
@@ -1136,7 +1136,7 @@ namespace ForwardSolver
     {        
       /*GMRES*/        
       SolverControl solver_control (system_matrix.m(),
-                                    1e-6*system_rhs.l2_norm(),
+                                    1e-8*system_rhs.l2_norm(),
                                     true, true); // Add to see residual history
       
       GrowingVectorMemory<BlockVector<double> > vector_memory;
