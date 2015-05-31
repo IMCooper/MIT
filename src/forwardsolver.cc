@@ -152,7 +152,7 @@ namespace ForwardSolver
       for (;cell!=endc; ++cell)
       {
         // TODO: update with the conductor material id from stored data.
-        if (cell->material_id() == 0)
+        if (cell->material_id() == 1)
         {
           cell->get_dof_indices (local_dof_indices);
           for (unsigned int i = 0; i<fe->dofs_per_cell; ++i)
@@ -166,17 +166,19 @@ namespace ForwardSolver
       cell = dof_handler.begin_active();
       for (;cell!=endc; ++cell)
       {
-        // TODO: update with the conductor material id from stored data.
-        if (cell->material_id() == 1)
+        // TODO: update with the non-conductor material id from stored data.
+        if (cell->material_id() == 0)
         {
           cell->get_dof_indices (local_dof_indices);
           for (unsigned int i = 0; i<fe->dofs_per_cell; ++i)
           {
-            if (local_dof_indices[i] >= n_lowest_order_dofs
-              && local_dof_indices[i] < n_higher_order_gradient_dofs
-              && !dof_in_conductor[local_dof_indices[i]])
+            const unsigned int dof = local_dof_indices[i];
+            if ( dof >= n_lowest_order_dofs
+              && dof < n_lowest_order_dofs + n_higher_order_gradient_dofs
+              && !dof_in_conductor[dof]
+              && !constraints.is_constrained(dof) )
             {
-              constraints.add_line(local_dof_indices[i]);
+              constraints.add_line(dof);
             }
           }
         }
@@ -380,7 +382,7 @@ namespace ForwardSolver
       for (;cell!=endc; ++cell)
       {
         // TODO: update with the conductor material id from stored data.
-        if (cell->material_id() == 0)
+        if (cell->material_id() == 1)
         {
           cell->get_dof_indices (local_dof_indices);
           for (unsigned int i = 0; i<fe->dofs_per_cell; ++i)
@@ -394,17 +396,19 @@ namespace ForwardSolver
       cell = dof_handler.begin_active();
       for (;cell!=endc; ++cell)
       {
-        // TODO: update with the conductor material id from stored data.
-        if (cell->material_id() == 1)
+        // TODO: update with the non-conductor material id from stored data.
+        if (cell->material_id() == 0)
         {
           cell->get_dof_indices (local_dof_indices);
           for (unsigned int i = 0; i<fe->dofs_per_cell; ++i)
           {
-            if (local_dof_indices[i] >= n_lowest_order_dofs
-              && local_dof_indices[i] < n_higher_order_gradient_dofs
-              && !dof_in_conductor[local_dof_indices[i]])
+            const unsigned int dof = local_dof_indices[i];
+            if ( dof >= n_lowest_order_dofs
+              && dof < n_lowest_order_dofs + n_higher_order_gradient_dofs
+              && !dof_in_conductor[dof]
+              && !constraints.is_constrained(dof) )
             {
-              constraints.add_line(local_dof_indices[i]);
+              constraints.add_line(dof);
             }
           }
         }
@@ -1126,6 +1130,7 @@ namespace ForwardSolver
       << std::endl;
       
       constraints.distribute (solution);
+      
     }
     else // p>0 use GMRES with low & higher order block preconditioner
     {        
