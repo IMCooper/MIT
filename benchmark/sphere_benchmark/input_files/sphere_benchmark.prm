@@ -55,7 +55,7 @@ subsection Material Parameters
   set omega = 3.141592653589793e+02
   
   # Regularisation Parameter
-  set regularisation parameter = 1e-6
+  set regularisation parameter = 1e-4
 
   # Background permittivity
   set background epsilon = 0.0
