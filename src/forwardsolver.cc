@@ -140,7 +140,7 @@ namespace ForwardSolver
     // is effectively zero.
     // Note: we must avoid constraining DoFs on the suface of the conductor, so first
     // we make a list of DoFs inside the conductor
-    if (p_order > 0)
+    if (p_order > 10)
     {
       std::vector<bool> dof_in_conductor (dof_handler.n_dofs());
       std::vector<types::global_dof_index> local_dof_indices (fe->dofs_per_cell);
@@ -370,7 +370,7 @@ namespace ForwardSolver
     // is effectively zero.
     // Note: we must avoid constraining DoFs on the suface of the conductor, so first
     // we make a list of DoFs inside the conductor
-    if (p_order > 0)
+    if (p_order > 10)
     {
       std::vector<bool> dof_in_conductor (dof_handler.n_dofs());
       std::vector<types::global_dof_index> local_dof_indices (fe->dofs_per_cell);
