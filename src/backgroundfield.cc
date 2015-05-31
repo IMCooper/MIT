@@ -251,8 +251,8 @@ namespace backgroundField
         std::complex<double> factor_r
         = (1/sqrt(r*r*r))*constant_B_magnitude*constant_C*bessel3halfs_plus*cos(theta);
         std::complex<double> factor_theta
-        = -constant_B_magnitude*constant_C*sin(theta)/(4.0*r)
-        *( (1/sqrt(r) + sqrt_ip )*bessel3halfs_plus + sqrt_ip*besselhalf_plus );
+        = -(constant_B_magnitude*constant_C*sin(theta))
+        *( (1/sqrt(r) + sqrt_ip )*bessel3halfs_plus + sqrt_ip*besselhalf_plus )/(4.0*r);
           
           // Convert to cartesian:
         std::complex<double> factor_x = factor_r*sin(theta)*cos(phi) + factor_theta*cos(theta)*cos(phi);
