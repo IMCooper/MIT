@@ -43,7 +43,7 @@ namespace ForwardSolver
   
   template<int dim, class DH>
   void EddyCurrent<dim, DH>::constructor_setup(DH &dof_handler,
-                                          const bool direct_flag)
+                                               const bool direct_flag)
                                           
   {
     // Code common to either version of the contructor
@@ -140,7 +140,8 @@ namespace ForwardSolver
     // is effectively zero.
     // Note: we must avoid constraining DoFs on the suface of the conductor, so first
     // we make a list of DoFs inside the conductor
-    if (p_order > 10)
+    /*  Disabled for now: Seems to be working poorly.
+    if (p_order > 0)
     {
       std::vector<bool> dof_in_conductor (dof_handler.n_dofs());
       std::vector<types::global_dof_index> local_dof_indices (fe->dofs_per_cell);
@@ -183,7 +184,7 @@ namespace ForwardSolver
           }
         }
       }
-    }
+    }*/
     
     constraints.close ();
 
@@ -370,7 +371,8 @@ namespace ForwardSolver
     // is effectively zero.
     // Note: we must avoid constraining DoFs on the suface of the conductor, so first
     // we make a list of DoFs inside the conductor
-    if (p_order > 10)
+    /* Disabled for now, seems to be working poorly.
+    if (p_order > 0)
     {
       std::vector<bool> dof_in_conductor (dof_handler.n_dofs());
       std::vector<types::global_dof_index> local_dof_indices (fe->dofs_per_cell);
@@ -413,7 +415,7 @@ namespace ForwardSolver
           }
         }
       }
-    }
+    }*/
     
     constraints.close ();
     
