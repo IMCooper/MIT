@@ -94,9 +94,20 @@ close all;
 clear files;
 axis='diag';
 p=4;
-for g=1:4
+for g=1:6
     files{g}=strcat('~/Desktop/temp_mnt/newbuild/mapping',num2str(g),'/sphere_',axis,'axis_ptfield_p',num2str(p),'.out');
 end
 sphere_plot_results(files)
 close(1);
-legend('PT', 'g=0', 'g=1', 'g=2', 'g=3');
+legend('PT', 'g=1', 'g=2', 'g=3', 'g=4', 'g=5', 'g=6');
+
+close all;
+clear files;
+axis='diag';
+g=2;
+for p=0:4
+    files{p+1}=strcat('~/Desktop/temp_mnt/newbuild/mapping',num2str(g),'/sphere_',axis,'axis_ptfield_p',num2str(p),'.out');
+end
+sphere_plot_results(files)
+close(1);
+legend('PT', 'g=1', 'g=2', 'g=3', 'g=4', 'g=5', 'g=6');

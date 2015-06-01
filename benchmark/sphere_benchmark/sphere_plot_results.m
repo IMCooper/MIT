@@ -15,7 +15,7 @@ function sphere_plot_results(filenames)
 %     'results/bench4_xaxis_ptfield_p0.out'};
 
 
-line_colour = {'.-r' '+-k' '*-g' '^-m'};
+line_colour = {'.-r' '+-k' '*-g' '^-m' 'd-c' 'x-y'};
 
 % load the first:
 data = load(filenames{1});
