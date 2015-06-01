@@ -105,6 +105,21 @@ namespace sphereBenchmark
     typename Triangulation<dim>::cell_iterator cell;
     const typename Triangulation<dim>::cell_iterator endc = tria.end();
     
+    // Move any vertices by a small amount if they lie on the central point.
+    // This is done to avoid the singular point in the solution which
+    // lies at (0,0,0).
+    cell = tria.begin ();
+    for (; cell!=endc; ++cell)
+    {
+      for (unsigned int i=0; i<GeometryInfo<dim>::vertices_per_cell; ++i)
+      {
+        if (sqrt(cell->vertex(i).square()) < 1e-10)
+        {
+          cell->vertex(i) += Point<dim> (1e-3,1e-3,1e-3);
+        }
+      }
+    }
+    
     // Make the interior sphere's boundary a spherical boundary:    
     // First set all manifold_ids to 0 (default).
     cell = tria.begin ();
