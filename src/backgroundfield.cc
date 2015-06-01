@@ -176,7 +176,7 @@ namespace backgroundField
 //       theta = atan2(p(1),hypot(p(0),p(2)));
       phi = atan2(p(1),p(0)); // TODO
       
-      if (r < 1e-4)
+      if (r < 1e-15)
       {
         factor=0.0;
         value_list[k]=0;
@@ -235,24 +235,30 @@ namespace backgroundField
 //       theta = atan2(p(1),hypot(p(0),p(2)));
       phi = atan2(p(1),p(0)); // TODO
       
-      if (r < 1e-4)
+      
+      
+      if (r < 1e-15)
       {
         value_list[k]=0;
       }        
-      else if (r < sphere_radius)
+      else if (r - sphere_radius <= 0)
       {
-        // TODO: confirm this is correct
         std::complex<double> temp(0, constant_p);
-        std::complex<double> sqrt_ip = sqrt(temp);
-        std::complex<double> v=sqrt(temp)*r;
-        std::complex<double> bessel3halfs_plus = sqrt(2.0/(numbers::PI*v))*(cosh(v) - (1.0/v)*sinh(v));
-        std::complex<double> besselhalf_plus = temp*sinh(v);
+        const std::complex<double> sqrt_ip = sqrt(temp);
+        const std::complex<double> v = sqrt_ip*r;
+        
+        // Calculate the required bessel function values:
+        temp = sqrt(2.0/(numbers::PI*v));
+        const std::complex<double> bessel3halfs_plus = temp*(cosh(v) - (1.0/v)*sinh(v));
+        const std::complex<double> bessel5halfs_plus = temp*( (1.0 + 3.0/(v*v))*sinh(v) - (3.0/v)*cosh(v));
+        const std::complex<double> besselhalf_plus = temp*sinh(v);
         
         std::complex<double> factor_r
-        = (1/sqrt(r*r*r))*constant_B_magnitude*constant_C*bessel3halfs_plus*cos(theta);
+        = (1.0/sqrt(r*r*r))*constant_B_magnitude*constant_C*bessel3halfs_plus*cos(theta);
+        
         std::complex<double> factor_theta
         = -(constant_B_magnitude*constant_C*sin(theta))
-        *( (1/sqrt(r) + sqrt_ip )*bessel3halfs_plus + sqrt_ip*besselhalf_plus )/(4.0*r);
+        *( bessel3halfs_plus/sqrt(r) + sqrt(r)*sqrt_ip*( besselhalf_plus + bessel5halfs_plus ) )/(4.0*r);
           
           // Convert to cartesian:
         std::complex<double> factor_x = factor_r*sin(theta)*cos(phi) + factor_theta*cos(theta)*cos(phi);
@@ -290,6 +296,9 @@ namespace backgroundField
   {
     // Returns the value of the perturbed field:
     // H_{p} = H - H_{0}
+    //
+    // In general, this is only valid outside of the object, so return 0
+    // for any position within the object.
     //
     // TODO: Assume that the centre of the object is (0,0,0) for now
     
