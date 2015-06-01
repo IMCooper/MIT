@@ -102,16 +102,43 @@ namespace sphereBenchmark
   void sphereBenchmark<dim>::process_mesh(bool neumann_flag)
   {
     // Routine to process the read in mesh
+    typename Triangulation<dim>::cell_iterator cell;
+    const typename Triangulation<dim>::cell_iterator endc = tria.end();
+    
+    // Make the interior sphere's boundary a spherical boundary:    
+    // First set all manifold_ids to 0 (default).
+    cell = tria.begin ();
+    for (; cell!=endc; ++cell)
+    {
+      cell->set_all_manifold_ids(numbers::invalid_manifold_id);
+    }
+    // Now find those on the surface of the sphere.
+    // Do this by looking through all cells with material_id
+    // of the conductor, then finding any faces of those cells which
+    // are shared with a cell with material_id of the non-conductor.
+    cell = tria.begin ();
+    for (; cell!=endc; ++cell)
+    {
+      if (cell->material_id() == 1)
+      {
+        for (unsigned int face=0; face<GeometryInfo<dim>::faces_per_cell; ++face)
+        {
+          if (cell->neighbor(face)->material_id() == 0)
+          {
+            cell->face(face)->set_all_manifold_ids(100);
+          }
+        }
+      }
+    }
+    
     // Here we set the boundary ids for the boundary conditions
     // and may choose to mark the boundary as curved, etc.
     // Can also perform mesh refinement here.
-    typename Triangulation<dim>::cell_iterator cell, endc;
-    endc = tria.end();
     
     // Set boundaries to neumann (boundary_id = 10)
     if (neumann_flag)
     {
-      cell = tria.begin ();      
+      cell = tria.begin ();
       for (; cell!=endc; ++cell)
       {
         for (unsigned int face=0; face<GeometryInfo<dim>::faces_per_cell; ++face)
@@ -123,50 +150,17 @@ namespace sphereBenchmark
         }
       }
     }
-    
-    // make the interior sphere's boundary a spherical boundary
-    // TODO: find way to make this more robust.
-    double tolerance = 0.065;
-//     unsigned int count =0;
-//     std::cout << MeshData::radius << std::endl;
-    
-    // First set all manifold_ids to 0 (default).
-    cell = tria.begin ();
-    for (; cell!=endc; ++cell)
-    {
-      cell->set_all_manifold_ids(0);      
-    }
-    // Now find those on the surface of the sphere.
-    cell = tria.begin ();
-    for (; cell!=endc; ++cell)
-    {
-      if (cell->material_id() == 1)
-      {
-        for (unsigned int face=0; face<GeometryInfo<dim>::faces_per_cell; ++face)
-        {
-          if (abs(cell->face(face)->center().norm()-MeshData::radius) < tolerance)
-          {
-            cell->face(face)->set_all_manifold_ids(100);
-//             ++count;
-//             std::cout << cell << " " << face << " " << cell->face(face)->center()  << std::endl;
-          }
-        }
-      }
-    }
-//     std::cout << count << std::endl;
 
     // Now refine the outer mesh
-    /*
-    cell = tria.begin_active();
-    for (; cell!=endc; ++cell)
-    {
-//       if (cell->material_id() == 0)
-//       {
-        cell->set_refine_flag();
-//       }                         
-    }
-    tria.execute_coarsening_and_refinement ();    
-    */
+//     cell = tria.begin_active();
+//     for (; cell!=endc; ++cell)
+//     {
+// //       if (cell->material_id() == 0)
+// //       {
+//         cell->set_refine_flag();
+// //       }
+//     }
+//     tria.execute_coarsening_and_refinement ();
   }
   template <int dim>
   void sphereBenchmark<dim>::run(std::string input_filename, 
@@ -187,7 +181,7 @@ namespace sphereBenchmark
     tria.set_manifold (100, sph_boundary);
 //     tria.refine_global(2);
     
-    initialise_materials();    
+    initialise_materials();
     // TESTING
     // Check polar coords:
 //     {
