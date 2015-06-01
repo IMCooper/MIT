@@ -1089,7 +1089,7 @@ namespace ForwardSolver
   }
   
   template<int dim, class DH>
-  void EddyCurrent<dim, DH>::solve (Vector<double> &output_solution)
+  void EddyCurrent<dim, DH>::solve (Vector<double> &output_solution, unsigned int &n_iterations)
   {
     // Solve the linear system for the Eddy Current problem.
     // Can call initialise_solver() before this routine, otherwise
@@ -1104,36 +1104,40 @@ namespace ForwardSolver
       // Must have called initialise_solver.   
       direct_solve.vmult (solution, system_rhs);
       constraints.distribute (solution);
+      
+      n_iterations = 1;
     }
-    else if (p_order == 0) // use GMRES with low order block preconditioner
-    {
-      /*GMRES*/        
-      SolverControl solver_control (system_matrix.m(),
-                                    1e-8*system_rhs.l2_norm(),
-                                    true, true); // Add to see residual history
-      
-      GrowingVectorMemory<BlockVector<double> > vector_memory;
-      SolverGMRES<BlockVector<double> >::AdditionalData gmres_data;
-      gmres_data.max_n_tmp_vectors = 250;
-      gmres_data.right_preconditioning = false;
-      gmres_data.force_re_orthogonalization = false;
-      
-      SolverGMRES<BlockVector<double> > gmres(solver_control, vector_memory,
-                                              gmres_data);
-      
-      gmres.solve(system_matrix,
-                  solution,
-                  system_rhs,
-                  *preconditioner);
-      
-      // Output iterations to screen
-      std::cout << "GMRES Iterations:                "
-      << solver_control.last_step()
-      << std::endl;
-      
-      constraints.distribute (solution);
-      
-    }
+//     else if (p_order == 0) // use GMRES with low order block preconditioner
+//     {
+//       /*GMRES*/        
+//       SolverControl solver_control (system_matrix.m(),
+//                                     1e-8*system_rhs.l2_norm(),
+//                                     true, true); // Add to see residual history
+//       
+//       GrowingVectorMemory<BlockVector<double> > vector_memory;
+//       SolverGMRES<BlockVector<double> >::AdditionalData gmres_data;
+//       gmres_data.max_n_tmp_vectors = 250;
+//       gmres_data.right_preconditioning = false;
+//       gmres_data.force_re_orthogonalization = false;
+//       
+//       SolverGMRES<BlockVector<double> > gmres(solver_control, vector_memory,
+//                                               gmres_data);
+//       
+//       gmres.solve(system_matrix,
+//                   solution,
+//                   system_rhs,
+//                   *preconditioner);
+//       
+//       // Output iterations to screen
+//       deallog << "GMRES Iterations:                "
+//       << solver_control.last_step()
+//       << std::endl;
+//       
+//       n_iterations = solver_control.last_step();
+//       
+//       constraints.distribute (solution);
+//       
+//     }
     else // p>0 use GMRES with low & higher order block preconditioner
     {        
       /*GMRES*/        
@@ -1156,9 +1160,11 @@ namespace ForwardSolver
                   *preconditioner);
       
       // Output iterations to screen
-      std::cout << "GMRES Iterations:                "
+      deallog << "GMRES Iterations:                "
       << solver_control.last_step()
       << std::endl;
+      
+      n_iterations = solver_control.last_step();
       
       constraints.distribute (solution);
     }

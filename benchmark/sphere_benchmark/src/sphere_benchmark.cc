@@ -216,7 +216,7 @@ namespace sphereBenchmark
     
     
     
-    std::cout << "Number of active cells:       "
+    deallog << "Number of active cells:       "
     << tria.n_active_cells()
     << std::endl;
     
@@ -231,19 +231,19 @@ namespace sphereBenchmark
                                                           fe,
                                                           PreconditionerData::use_direct);
     
-    std::cout << "Number of degrees of freedom: "
+    deallog << "Number of degrees of freedom: "
     << dof_handler.n_dofs()
     << std::endl;
     
     // assemble the matrix for the eddy current problem:
-    std::cout << "Assembling System Matrix...." << std::endl;
+    deallog << "Assembling System Matrix...." << std::endl;
     eddy.assemble_matrices(dof_handler);
-    std::cout << "Matrix Assembly complete. " << std::endl;
+    deallog << "Matrix Assembly complete. " << std::endl;
     
     // initialise the linear solver - precomputes any inverses for the preconditioner, etc:
-    std::cout << "Initialising Solver..." << std::endl;
+    deallog << "Initialising Solver..." << std::endl;
     eddy.initialise_solver();
-    std::cout << "Solver initialisation complete. " << std::endl;
+    deallog << "Solver initialisation complete. " << std::endl;
     
     // construct RHS for this field:
     Vector<double> uniform_field(dim+dim);
@@ -269,17 +269,18 @@ namespace sphereBenchmark
     */
     
     // assemble rhs
-    std::cout << "Assembling System RHS...." << std::endl;
+    deallog << "Assembling System RHS...." << std::endl;
     eddy.assemble_rhs(dof_handler,
                       boundary_conditions);
-    std::cout << "Matrix RHS complete. " << std::endl;
+    deallog << "Matrix RHS complete. " << std::endl;
     
-    std::cout << "Solving... " << std::endl;
+    deallog << "Solving... " << std::endl;
     Vector<double> solution;
     // solve system & storage in the vector of solutions:
-    eddy.solve(solution);
+    unsigned int n_gmres_iterations;
+    eddy.solve(solution,n_gmres_iterations);
 
-    std::cout << "Computed solution. " << std::endl;
+    deallog << "Computed solution. " << std::endl;
     
     // Output error to screen:
     Vector<double> diff_per_cell(tria.n_active_cells());
@@ -290,8 +291,15 @@ namespace sphereBenchmark
                                                         dof_handler,
                                                         solution,
                                                         boundary_conditions);
-    std::cout << "L2 Error: " << l2err << std::endl;
-    std::cout << "HCurl Error: " << hcurlerr << std::endl;
+    deallog << "L2 Error: " << l2err << std::endl;
+    deallog << "HCurl Error: " << hcurlerr << std::endl;
+    // Short version:
+    std::cout << tria.n_active_cells()
+    << " " << dof_handler.n_dofs()
+    << " " << n_gmres_iterations
+    << " " << l2err
+    << " " << hcurlerr
+    << std::endl;
     
     {
       std::ostringstream tmp;

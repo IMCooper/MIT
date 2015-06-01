@@ -118,7 +118,8 @@ namespace ForwardSolver
                        const Function<dim> &rhs_function);
     
     void initialise_solver();
-    void solve (Vector<double> &output_solution);
+    void solve (Vector<double> &output_solution,
+                unsigned int &n_iterations);
     
     
   private:
