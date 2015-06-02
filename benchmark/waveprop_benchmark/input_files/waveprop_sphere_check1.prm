@@ -3,8 +3,12 @@
 
 subsection Mesh Data
 
+  # Use an external mesh file (specified by mesh file)
+  set external mesh = true 
+
   # Name of the output file (without extension)
-  set Mesh file = ../mesh/sphere_benchmark1.ucd
+  set mesh file = ../mesh/sphere_benchmark1.ucd
+  #set mesh file = /Users/scmimc/Documents/MaxwellProbs/Code/Ross/deal_codes/direct/MIT_code/benchmark/waveprop_benchmark/mesh/sphere_benchmark4.ucd
 
 end
 

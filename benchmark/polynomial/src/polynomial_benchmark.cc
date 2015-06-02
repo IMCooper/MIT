@@ -159,7 +159,7 @@ namespace polynomialBenchmark
         tria.refine_global(1);
       }
     }
-    return;
+    //return;
     process_mesh(true);
     
     // Set boundary condition. This also doubles as the RHS function (J = A).

@@ -16,6 +16,9 @@
 #include <myvectortools.h>
 #include <outputtools.h>
 
+#include <Timer.h>
+#include <Config.h>
+
 using namespace dealii;
 
 namespace wavepropBenchmark
@@ -25,7 +28,7 @@ namespace wavepropBenchmark
   class wavepropBenchmark
   {
   public:
-    wavepropBenchmark (const unsigned int order);
+    wavepropBenchmark (const unsigned int order, imc::Config* aConfig);
     ~wavepropBenchmark ();
     void run(std::string input_filename,
              std::string output_filename);
@@ -33,7 +36,7 @@ namespace wavepropBenchmark
     Triangulation<dim> tria;
     FESystem<dim> fe;
     DoFHandler<dim> dof_handler;
-
+    imc::Config* config;
     unsigned int p_order;
     
     void initialise_materials();
@@ -41,11 +44,12 @@ namespace wavepropBenchmark
   };
   
   template <int dim>
-  wavepropBenchmark<dim>::wavepropBenchmark(const unsigned int order)
+  wavepropBenchmark<dim>::wavepropBenchmark(const unsigned int order, imc::Config* aConfig)
   :
   fe (FE_Nedelec<dim>(order), 2),
   dof_handler (tria),
-  p_order(order)
+  p_order(order),
+  config(aConfig)
   {
   }
   
@@ -131,7 +135,10 @@ namespace wavepropBenchmark
   void wavepropBenchmark<dim>::run(std::string input_filename, 
                                  std::string output_filename)
   {
-    
+    std::vector<imc::Timer> timers;  
+    std::string timerName ="cycle 1";
+    imc::Timer timer(timerName);   
+
     ParameterHandler prm;
     InputTools::ParameterReader param(prm);
     param.read_and_copy_parameters(input_filename);
@@ -188,22 +195,29 @@ namespace wavepropBenchmark
     dof_handler.distribute_dofs (fe);
     ForwardSolver::EddyCurrent<dim, DoFHandler<dim>> eddy(dof_handler,
                                                           fe,
+                                                          config,
                                                           PreconditionerData::use_direct);
     
+
     std::cout << "Number of degrees of freedom: "
     << dof_handler.n_dofs()
     << std::endl;
-    
+
+timer.point("setup");    
     // assemble the matrix for the eddy current problem:
     std::cout << "Assembling System Matrix...." << std::endl;
-    eddy.assemble_matrices(dof_handler);
+    if (config->useOMP()){
+      eddy.assemble_matrices_OMP(dof_handler);
+    }else{
+      eddy.assemble_matrices(dof_handler);
+    }
     std::cout << "Matrix Assembly complete. " << std::endl;
-    
+timer.point("assemble"); 
     // initialise the linear solver - precomputes any inverses for the preconditioner, etc:
     std::cout << "Initialising Solver..." << std::endl;
     eddy.initialise_solver();
     std::cout << "Solver initialisation complete. " << std::endl;
-
+timer.point("init_solve");
     // Now solve for each excitation coil:
     std::cout << "Solving... " << std::endl;
     Vector<double> solution;
@@ -231,8 +245,14 @@ namespace wavepropBenchmark
     
     // solve system & storage in the vector of solutions:
     eddy.solve(solution);
-
+timer.point("solve");
     std::cout << "Computed solution. " << std::endl;
+timer.end();
+timers.push_back(timer);
+imc::Timer::print(timers);
+imc::Timer::file(timers, "times.txt");
+
+
     /*
     {
       std::ostringstream tmp;
@@ -333,7 +353,7 @@ namespace wavepropBenchmark
 int main (int argc, char* argv[])
 {
 //  using namespace dealii;
-  
+  imc::Config config("../src/config.txt"); 
   unsigned int dim = 3;
   // Set default input:
   unsigned int p_order = 0;
@@ -373,7 +393,7 @@ int main (int argc, char* argv[])
   std::ofstream deallog_file(deallog_filename.str());
   deallog.attach(deallog_file);
   
-  wavepropBenchmark::wavepropBenchmark<3> eddy_voltages(p_order);
+  wavepropBenchmark::wavepropBenchmark<3> eddy_voltages(p_order, &config);
   eddy_voltages.run(input_filename,
                     output_filename);
   

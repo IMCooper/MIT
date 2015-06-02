@@ -3,6 +3,7 @@
 ##
 
 set(TARGET test)
+#set (TARGET ../benchmark/sphere_benchmark/src/sphere_benchmark)
 
 #file(GLOB test_headers "include/*.h") # NOT NEEDED
 
@@ -25,7 +26,7 @@ set(TARGET_SRC
     src/mypreconditioner.cc
     src/myvectortools.cc
     src/outputtools.cc
-    src/${TARGET}
+    ${TARGET}
     )
 
 # Usually, you will not need to modify anything beyond this point...

@@ -377,6 +377,135 @@ namespace ForwardSolver
     }
   }
   
+
+  template <int dim, class DH>
+  void EddyCurrent<dim, DH>::assemble_matrices_OMP (const DH &dof_handler)
+  {
+    /*
+     * Function to assemble the system matrix.
+     * 
+     * Should really only need to be called once for a given
+     * set of material parameters.
+     */
+    QGauss<dim>  quadrature_formula(quad_order);
+    
+    const unsigned int n_q_points = quadrature_formula.size();
+    
+    const unsigned int dofs_per_cell = fe->dofs_per_cell;
+    
+    FEValues<dim> fe_values (*fe, quadrature_formula,
+                             update_values    |  update_gradients |
+                             update_quadrature_points  |  update_JxW_values);
+    
+    
+    // Extractors to real and imaginary parts
+    const FEValuesExtractors::Vector E_re(0);
+    const FEValuesExtractors::Vector E_im(dim);
+    
+    // Local cell storage:
+    FullMatrix<double> cell_matrix (dofs_per_cell, dofs_per_cell);
+    FullMatrix<double> cell_preconditioner (dofs_per_cell, dofs_per_cell);
+    std::vector<types::global_dof_index> local_dof_indices (dofs_per_cell);
+    
+    // block indices:
+    unsigned int block_index_i;
+    unsigned int block_index_j;
+    
+    // Material parameters:
+    double current_mur;
+    double mur_inv;
+    double current_kappa_re;
+    double current_kappa_im;
+    double current_kappa_magnitude;
+    
+    typename DH::active_cell_iterator cell, endc;
+    endc = dof_handler.end();
+    
+    
+    cell = dof_handler.begin_active();
+    for (; cell!=endc; ++cell)
+    {
+      fe_values.reinit (cell);
+      current_mur = EquationData::param_mur(cell->material_id());
+      mur_inv = 1.0/current_mur;
+      current_kappa_re = EquationData::param_kappa_re(cell->material_id());
+      current_kappa_im = EquationData::param_kappa_im(cell->material_id());
+      // for preconditioner:
+      current_kappa_magnitude = sqrt(current_kappa_im*current_kappa_im + current_kappa_re*current_kappa_re);
+      cell_matrix = 0;
+      cell_preconditioner = 0;
+            
+      // Loop over quad points:
+      int chunk = chunkSize;
+      omp_set_num_threads(omp_threads);
+      #pragma omp parallel for schedule(static, chunk) collapse(2) private (block_index_i, block_index_j) reduction(+:num_opps) 
+      for (unsigned int q_point=0; q_point<n_q_points; ++q_point)
+      { 
+        for (unsigned int i=0; i<dofs_per_cell; ++i)
+        {
+          block_index_i = fe->system_to_block_index(i).first;
+          // Construct local matrix:
+          for (unsigned int j=0; j<dofs_per_cell; ++j)
+          {
+            block_index_j = fe->system_to_block_index(j).first;
+            // block 0 = real, block 1 = imaginary.
+            if (block_index_i == block_index_j)
+            {
+              if (block_index_i == 0)
+              {
+                double curl_part = mur_inv*fe_values[E_re].curl(i,q_point)*fe_values[E_re].curl(j,q_point);
+                double mass_part = fe_values[E_re].value(i,q_point)*fe_values[E_re].value(j,q_point);
+                
+                cell_matrix(i,j) += ( curl_part + current_kappa_re*mass_part )*fe_values.JxW(q_point);
+                
+                cell_preconditioner(i,j) += ( curl_part + current_kappa_magnitude*mass_part )*fe_values.JxW(q_point);  
+              }
+              else if (block_index_i == 1)
+              {
+                double curl_part = mur_inv*fe_values[E_im].curl(i,q_point)*fe_values[E_im].curl(j,q_point);
+                double mass_part = fe_values[E_im].value(i,q_point)*fe_values[E_im].value(j,q_point);
+                
+                cell_matrix(i,j) += ( curl_part + current_kappa_re*mass_part )*fe_values.JxW(q_point);
+                                      
+                cell_preconditioner(i,j) += ( curl_part + current_kappa_magnitude*mass_part )*fe_values.JxW(q_point);  
+              }  
+            }
+            else
+            {
+              if (block_index_i == 0) // then block_index_j == 1
+              {
+                cell_matrix(i,j) += -current_kappa_im*fe_values[E_re].value(i,q_point)*fe_values[E_im].value(j,q_point)*fe_values.JxW(q_point);
+              }
+              else if (block_index_i == 1) // then block_index_j == 0
+              {
+                cell_matrix(i,j) += current_kappa_im*fe_values[E_im].value(i,q_point)*fe_values[E_re].value(j,q_point)*fe_values.JxW(q_point);
+                
+              }
+            }  
+          }
+        }  
+      }
+      
+      cell->get_dof_indices (local_dof_indices);
+      
+      
+      // Distribute & constraint to global matrices:
+      // Note: need to apply RHS constraints using the columns of their
+      // local matrix in the other routine.
+      constraints.distribute_local_to_global(cell_matrix,
+                                             local_dof_indices,
+                                             system_matrix);
+      if (~direct)
+      {
+        constraints.distribute_local_to_global(cell_preconditioner,
+                                               local_dof_indices,
+                                               system_preconditioner);
+      }
+    }
+  }
+  
+
+
   // Assemble the rhs for a zero RHS
   // in the governing equation.
   template <int dim, class DH>
@@ -560,10 +689,416 @@ namespace ForwardSolver
     }
   }
   
+
+    // Assemble the rhs for a zero RHS
+  // in the governing equation.
+  template <int dim, class DH>
+  void EddyCurrent<dim, DH>::assemble_rhs_OMP (const DH &dof_handler,
+                                           const curlFunction<dim> &boundary_function)
+  {
+    // Function to assemble the RHS for a given boundary function.
+    // 
+    // It first updates the constraints and then computes the RHS.
+    //
+    // Note this will completely reset the RHS stored within the class.
+    
+    // Zero the RHS:
+    system_rhs = 0;
+    
+    compute_constraints(dof_handler,
+                        boundary_function);
+    
+    QGauss<dim>  quadrature_formula(quad_order);
+    const unsigned int n_q_points = quadrature_formula.size();
+    
+    QGauss<dim-1> face_quadrature_formula(quad_order);
+    const unsigned int n_face_q_points = face_quadrature_formula.size();
+    
+    const unsigned int dofs_per_cell = fe->dofs_per_cell;
+
+    // Needed to calc the local matrix for distribute_local_to_global
+    // Note: only need the columns of the constrained entries.
+    FEValues<dim> fe_values (*fe, quadrature_formula,
+                             update_values    |  update_gradients |
+                             update_quadrature_points  |  update_JxW_values);
+    
+    FEFaceValues<dim> fe_face_values(*fe, face_quadrature_formula,
+                                     update_values | update_quadrature_points |
+                                     update_normal_vectors | update_JxW_values);
+    
+    // Extractors to real and imaginary parts
+    const FEValuesExtractors::Vector E_re(0);
+    const FEValuesExtractors::Vector E_im(dim);
+    
+    // Local cell storage:
+    Vector<double> cell_rhs (dofs_per_cell);
+    std::vector<types::global_dof_index> local_dof_indices (dofs_per_cell);
+    FullMatrix<double> cell_matrix(dofs_per_cell, dofs_per_cell);
+    
+    // block indices:
+    unsigned int block_index_i;
+    unsigned int block_index_j;
+    
+    // Material parameters:
+    double current_mur;
+    double mur_inv;
+    double current_kappa_re;
+    double current_kappa_im;
+    
+    //RHS storage:
+    std::vector<Vector<double> > rhs_value_list(n_q_points, Vector<double>(fe->n_components()));
+    Tensor<1,dim> rhs_value_re;
+    Tensor<1,dim> rhs_value_im;
+    
+    // Neumann storage
+    std::vector<Vector<double> > neumann_value_list(n_face_q_points, Vector<double>(fe->n_components()));
+    Tensor<1,dim> neumann_value_re(dim);
+    Tensor<1,dim> neumann_value_im(dim);
+    Tensor<1,dim> normal_vector;
+    Tensor<1,dim> crossproduct_re(dim);
+    Tensor<1,dim> crossproduct_im(dim);
+    
+    typename DoFHandler<dim>::active_cell_iterator
+    cell = dof_handler.begin_active(),
+    endc = dof_handler.end();
+    for (; cell!=endc; ++cell)
+    {
+      cell_rhs = 0.0;
+      current_mur = EquationData::param_mur(cell->material_id());
+      mur_inv = 1.0/current_mur;
+      current_kappa_re = EquationData::param_kappa_re(cell->material_id());
+      current_kappa_im = EquationData::param_kappa_im(cell->material_id());
+      // Loop over faces for neumann condition:
+      for (unsigned int face_number=0; face_number<GeometryInfo<dim>::faces_per_cell; ++face_number)
+      {
+        fe_face_values.reinit (cell, face_number);
+        
+        if (cell->face(face_number)->at_boundary()
+          &&
+          (cell->face(face_number)->boundary_indicator() == 10))
+        {
+          // Store values of (mur^-1)*curl E:
+          // For this problem, vector value list returns values of H
+          // Note that H = i(omega/mu)*curl(E), (mu NOT mur, remember mur = mu/mu0)
+          // so (1/mur)*curl(E) = mu_0*H/(i*omega). (1/i = -i)
+          // i.e. we use the imaginary part of H for real curl E and real for imag curl E.
+          //      and must multiply the imag part by -1.
+          
+          // TODO: This is likely to cause problems - May need to separate to a neumann and dirichlet function.
+          // For now, we've defined a derived Function class, curlFunction.
+          // This seems to get around problems with adding the curl to a Function class.
+          
+          // NOTE: Have reversed the switching of re and im parts.. was causing issues when using the
+          // A formulation properly this needs to be clarified fully and sorted out when I create the definitive version of this
+          // class.
+          boundary_function.curl_value_list(fe_face_values.get_quadrature_points(), neumann_value_list);
+          omp_set_num_threads(omp_threads);
+          #pragma omp parallel for schedule(static, chunk) collapse(1) private (block_index_i, block_index_j) reduction(+:num_opps)
+          for (unsigned int q_point=0; q_point<n_face_q_points; ++q_point)
+          {
+            for (unsigned int component=0; component<dim; component++)
+            {
+              neumann_value_re[component] = neumann_value_list[q_point](component);
+              neumann_value_im[component] = neumann_value_list[q_point](component+dim);
+              normal_vector[component] = fe_face_values.normal_vector(q_point)(component);
+            }
+            cross_product(crossproduct_re, normal_vector, neumann_value_re);
+            cross_product(crossproduct_im, normal_vector, neumann_value_im);
+            for (unsigned int i=0; i<dofs_per_cell; ++i)
+            {
+              block_index_i = fe->system_to_block_index(i).first;
+              if (block_index_i == 0) // then block_index_j == 1
+              {
+                cell_rhs(i) += -mur_inv*(crossproduct_re*fe_face_values[E_re].value(i,q_point)*fe_face_values.JxW(q_point));
+              }
+              else
+              {
+                cell_rhs(i) += -mur_inv*(crossproduct_im*fe_face_values[E_im].value(i,q_point)*fe_face_values.JxW(q_point));
+              }
+            }
+          }
+        }
+      }
+      cell_matrix = 0;
+      cell->get_dof_indices (local_dof_indices);
+      
+      // Create the columns of the local matrix which belong to a constrained
+      // DoF. These are all that are needed to apply the constraints to the RHS
+      fe_values.reinit (cell);
+
+      omp_set_num_threads(omp_threads);
+      #pragma omp parallel for schedule(static, chunk) collapse(1) private (block_index_i, block_index_j) reduction(+:num_opps)
+      for (unsigned int j=0; j<dofs_per_cell; ++j)
+      {
+        // Check each column to see if it corresponds to a constrained DoF:
+        if (constraints.is_constrained(local_dof_indices[j]))
+        {
+          block_index_j = fe->system_to_block_index(j).first;
+          // If yes, cycle through all rows to fill the column:
+          for (unsigned int i=0; i<dofs_per_cell; ++i)
+          {
+            block_index_i = fe->system_to_block_index(i).first;
+            for (unsigned int q_point=0; q_point<n_q_points; ++q_point)
+            {
+              // block 0 = real, block 1 = imaginary.
+              if (block_index_i == block_index_j)
+              {
+                if (block_index_i == 0)
+                {
+                  cell_matrix(i,j) += (  mur_inv*fe_values[E_re].curl(i,q_point)*fe_values[E_re].curl(j,q_point) 
+                                       + current_kappa_re*fe_values[E_re].value(i,q_point)*fe_values[E_re].value(j,q_point)
+                                      )*fe_values.JxW(q_point);
+                }
+                else if (block_index_i == 1)
+                {
+                  cell_matrix(i,j) += (  mur_inv*fe_values[E_im].curl(i,q_point)*fe_values[E_im].curl(j,q_point)
+                                       + current_kappa_re*fe_values[E_im].value(i,q_point)*fe_values[E_im].value(j,q_point)
+                                      )*fe_values.JxW(q_point);
+                }
+              }
+              else // block_index_i != block_index_j
+              {
+                if (block_index_i == 0) // then block_index_j == 1
+                {
+                  cell_matrix(i,j) += -current_kappa_im*fe_values[E_re].value(i,q_point)*fe_values[E_im].value(j,q_point)*fe_values.JxW(q_point);                 
+                }
+                else if (block_index_i == 1) // then block_index_j == 0
+                {
+                  cell_matrix(i,j) += current_kappa_im*fe_values[E_im].value(i,q_point)*fe_values[E_re].value(j,q_point)*fe_values.JxW(q_point);
+                }
+              }  
+            }              
+          }
+        }
+      }      
+      // Use the cell matrix constructed for the constrained DoF columns
+      // to add the local contribution to the global RHS:
+      constraints.distribute_local_to_global(cell_rhs, local_dof_indices, system_rhs, cell_matrix);      
+    }
+  }
+  
+
+
   // Version of assemble_rhs to include the option of a non-zero rhs function
   // This is added as an additional input Function (curlFunctions, etc are automatically valid).
   template <int dim, class DH>
   void EddyCurrent<dim, DH>::assemble_rhs (const DH &dof_handler,
+                                           const curlFunction<dim> &boundary_function,
+                                           const Function<dim> &rhs_function)
+  {
+    /*
+     * Function to assemble the RHS for a given boundary function.
+     * 
+     * It first updates the constraints and then computes the RHS.
+     */
+    
+    // Zero the RHS:
+    system_rhs = 0;
+    
+    compute_constraints(dof_handler,
+                        boundary_function);
+    
+    QGauss<dim>  quadrature_formula(quad_order);
+    const unsigned int n_q_points = quadrature_formula.size();
+    
+    QGauss<dim-1> face_quadrature_formula(quad_order);
+    const unsigned int n_face_q_points = face_quadrature_formula.size();
+    
+    const unsigned int dofs_per_cell = fe->dofs_per_cell;
+
+    // Needed to calc the local matrix for distribute_local_to_global
+    // Note: only need the columns of the constrained entries.
+    FEValues<dim> fe_values (*fe, quadrature_formula,
+                             update_values    |  update_gradients |
+                             update_quadrature_points  |  update_JxW_values);
+    
+    FEFaceValues<dim> fe_face_values(*fe, face_quadrature_formula,
+                                     update_values | update_quadrature_points |
+                                     update_normal_vectors | update_JxW_values);
+    
+    // Extractors to real and imaginary parts
+    const FEValuesExtractors::Vector E_re(0);
+    const FEValuesExtractors::Vector E_im(dim);
+    
+    // Local cell storage:
+    Vector<double> cell_rhs (dofs_per_cell);
+    std::vector<types::global_dof_index> local_dof_indices (dofs_per_cell);
+    FullMatrix<double> cell_matrix(dofs_per_cell, dofs_per_cell);
+    
+    // block indices:
+    unsigned int block_index_i;
+    unsigned int block_index_j;
+    
+    // Material parameters:
+    double current_mur;
+    double mur_inv;
+    double current_kappa_re;
+    double current_kappa_im;
+    
+    //RHS storage:
+    std::vector<Vector<double> > rhs_value_list(n_q_points, Vector<double>(fe->n_components()));
+    Tensor<1,dim> rhs_value_re;
+    Tensor<1,dim> rhs_value_im;
+    
+    // Neumann storage
+    std::vector<Vector<double> > neumann_value_list(n_face_q_points, Vector<double>(fe->n_components()));
+    Tensor<1,dim> neumann_value_re(dim);
+    Tensor<1,dim> neumann_value_im(dim);
+    Tensor<1,dim> normal_vector;
+    Tensor<1,dim> crossproduct_re(dim);
+    Tensor<1,dim> crossproduct_im(dim);
+    
+    typename DoFHandler<dim>::active_cell_iterator
+    cell = dof_handler.begin_active(),
+    endc = dof_handler.end();
+    for (; cell!=endc; ++cell)
+    {
+      cell_rhs = 0.0;
+      current_mur = EquationData::param_mur(cell->material_id());
+      mur_inv = 1.0/current_mur;
+      current_kappa_re = EquationData::param_kappa_re(cell->material_id());
+      current_kappa_im = EquationData::param_kappa_im(cell->material_id());
+      // Loop over faces for neumann condition:
+      for (unsigned int face_number=0; face_number<GeometryInfo<dim>::faces_per_cell; ++face_number)
+      {
+        fe_face_values.reinit (cell, face_number);
+        
+        if (cell->face(face_number)->at_boundary()
+          &&
+          (cell->face(face_number)->boundary_indicator() == 10))
+        {
+          // Store values of (mur^-1)*curl E:
+          // For this problem, vector value list returns values of H
+          // Note that H = i(omega/mu)*curl(E), (mu NOT mur, remember mur = mu/mu0)
+          // so (1/mur)*curl(E) = mu_0*H/(i*omega). (1/i = -i)
+          // i.e. we use the imaginary part of H for real curl E and real for imag curl E.
+          //      and must multiply the imag part by -1.
+          
+          // TODO: This is likely to cause problems - May need to separate to a neumann and dirichlet function.
+          // For now, we've defined a derived Function class, curlFunction.
+          // This seems to get around problems with adding the curl to a Function class.
+          
+          // NOTE: Have reversed the switching of re and im parts.. was causing issues when using the
+          // A formulation properly this needs to be clarified fully and sorted out when I create the definitive version of this
+          // class.
+          boundary_function.curl_value_list(fe_face_values.get_quadrature_points(), neumann_value_list);
+          omp_set_num_threads(omp_threads);
+          #pragma omp parallel for schedule(static, chunk) collapse(1) private (block_index_i, block_index_j) reduction(+:num_opps)
+          for (unsigned int q_point=0; q_point<n_face_q_points; ++q_point)
+          {
+            for (unsigned int component=0; component<dim; component++)
+            {
+              neumann_value_re[component] = neumann_value_list[q_point](component);
+              neumann_value_im[component] = neumann_value_list[q_point](component+dim);
+              normal_vector[component] = fe_face_values.normal_vector(q_point)(component);
+            }
+            cross_product(crossproduct_re, normal_vector, neumann_value_re);
+            cross_product(crossproduct_im, normal_vector, neumann_value_im);
+            for (unsigned int i=0; i<dofs_per_cell; ++i)
+            {
+              block_index_i = fe->system_to_block_index(i).first;
+              if (block_index_i == 0) // then block_index_j == 1
+              {
+                cell_rhs(i) += -mur_inv*(crossproduct_re*fe_face_values[E_re].value(i,q_point)*fe_face_values.JxW(q_point));
+              }
+              else
+              {
+                cell_rhs(i) += -mur_inv*(crossproduct_im*fe_face_values[E_im].value(i,q_point)*fe_face_values.JxW(q_point));
+              }
+            }
+          }
+        }
+      }
+      cell_matrix = 0;
+      cell->get_dof_indices (local_dof_indices);
+      
+      // Create the columns of the local matrix which belong to a constrained
+      // DoF. These are all that are needed to apply the constraints to the RHS
+      fe_values.reinit (cell);
+      
+      // Loop for non-zero right hand side in equation:
+      rhs_function.vector_value_list(fe_values.get_quadrature_points(), rhs_value_list);
+omp_set_num_threads(omp_threads);
+#pragma omp parallel for schedule(static, chunk) collapse(1) private (block_index_i, block_index_j) reduction(+:num_opps)
+      for (unsigned int q_point=0; q_point<n_q_points; ++q_point)
+      {
+        for (unsigned int d=0; d<dim; ++d)
+        {
+          rhs_value_re[d] = rhs_value_list[q_point](d);
+          rhs_value_im[d] = rhs_value_list[q_point](d+dim);
+        }
+        for (unsigned int j=0; j<dofs_per_cell; ++j)
+        {
+          block_index_j = fe->system_to_block_index(j).first;
+          // block 0 = real, block 1 = imaginary.
+          if (block_index_j == 0)
+          {
+            cell_rhs(j) += rhs_value_re*fe_values[E_re].value(j,q_point)*fe_values.JxW(q_point);
+          }
+          else // block_index_j ==1
+          {
+            cell_rhs(j) += rhs_value_im*fe_values[E_im].value(j,q_point)*fe_values.JxW(q_point);
+          }
+        }
+      }
+omp_set_num_threads(omp_threads);
+#pragma omp parallel for schedule(static, chunk) collapse(1) private (block_index_i, block_index_j) reduction(+:num_opps)      
+      for (unsigned int j=0; j<dofs_per_cell; ++j)
+      {
+        // Check each column to see if it corresponds to a constrained DoF:
+        if (constraints.is_constrained(local_dof_indices[j]))
+        {
+          block_index_j = fe->system_to_block_index(j).first;
+          // If yes, cycle through all rows to fill the column:
+          for (unsigned int i=0; i<dofs_per_cell; ++i)
+          {
+            block_index_i = fe->system_to_block_index(i).first;
+            for (unsigned int q_point=0; q_point<n_q_points; ++q_point)
+            {
+              // block 0 = real, block 1 = imaginary.
+              if (block_index_i == block_index_j)
+              {
+                if (block_index_i == 0)
+                {
+                  cell_matrix(i,j) += (  mur_inv*fe_values[E_re].curl(i,q_point)*fe_values[E_re].curl(j,q_point) 
+                                       + current_kappa_re*fe_values[E_re].value(i,q_point)*fe_values[E_re].value(j,q_point)
+                                      )*fe_values.JxW(q_point);
+                }
+                else if (block_index_i == 1)
+                {
+                  cell_matrix(i,j) += (  mur_inv*fe_values[E_im].curl(i,q_point)*fe_values[E_im].curl(j,q_point)
+                                       + current_kappa_re*fe_values[E_im].value(i,q_point)*fe_values[E_im].value(j,q_point)
+                                      )*fe_values.JxW(q_point);
+                }
+              }
+              else // block_index_i != block_index_j
+              {
+                if (block_index_i == 0) // then block_index_j == 1
+                {
+                  cell_matrix(i,j) += -current_kappa_im*fe_values[E_re].value(i,q_point)*fe_values[E_im].value(j,q_point)*fe_values.JxW(q_point);                 
+                }
+                else if (block_index_i == 1) // then block_index_j == 0
+                {
+                  cell_matrix(i,j) += current_kappa_im*fe_values[E_im].value(i,q_point)*fe_values[E_re].value(j,q_point)*fe_values.JxW(q_point);
+                }
+              }  
+            }              
+          }
+        }
+      }      
+      // Use the cell matrix constructed for the constrained DoF columns
+      // to add the local contribution to the global RHS:
+      constraints.distribute_local_to_global(cell_rhs, local_dof_indices, system_rhs, cell_matrix);      
+    }
+  }
+  
+
+
+
+  // Version of assemble_rhs to include the option of a non-zero rhs function
+  // This is added as an additional input Function (curlFunctions, etc are automatically valid).
+  template <int dim, class DH>
+  void EddyCurrent<dim, DH>::assemble_rhs_OMP (const DH &dof_handler,
                                            const curlFunction<dim> &boundary_function,
                                            const Function<dim> &rhs_function)
   {
@@ -768,6 +1303,9 @@ namespace ForwardSolver
     }
   }
   
+
+
+
   template<int dim, class DH>
   void EddyCurrent<dim, DH>::initialise_solver() // removed:(const bool direct_solver_flag)
   {

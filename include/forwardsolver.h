@@ -40,6 +40,8 @@
 #include <mydofrenumbering.h>
 #include <mypreconditioner.h>
 
+#include <omp.h>
+
 using namespace dealii;
 
 #ifndef FORWARDSOLVER_H
@@ -100,13 +102,20 @@ namespace ForwardSolver
     ~EddyCurrent ();
     
     void assemble_matrices (const DH &dof_handler);
+    void assemble_matrices_OMP (const DH &dof_handler);
     // zero rhs version:
     void assemble_rhs (const DH &dof_handler,
+                       const curlFunction<dim> &boundary_function);
+    void assemble_rhs_OMP (const DH &dof_handler,
                        const curlFunction<dim> &boundary_function);
 
     
     // non-zero rhs version:
     void assemble_rhs (const DH &dof_handler,
+                       const curlFunction<dim> &boundary_function,
+                       const Function<dim> &rhs_function);
+    // non-zero rhs version:
+    void assemble_rhs_OMP (const DH &dof_handler,
                        const curlFunction<dim> &boundary_function,
                        const Function<dim> &rhs_function);
     
