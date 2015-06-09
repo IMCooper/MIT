@@ -152,9 +152,9 @@ namespace backgroundField
        constant_D = pow(sphere_radius,3)*( (2.0*mu_c + mu_n)*v*besselhalf_minus - (mu_n*(1.0+v*v) + 2.0*mu_c)*besselhalf_plus )
                     / ( (mu_c - mu_n)*v*besselhalf_minus + (mu_n*(1.0+v*v)-mu_c)*besselhalf_plus );
     }
-                    
-    std::cout << constant_C.real() << " + "<<constant_C.imag() << "i" << std::endl;
-    std::cout << constant_D.real() << " + "<<constant_D.imag() << "i" << std::endl;
+    // Debugging (can compare to matlab code)
+//     std::cout << constant_C.real() << " + "<<constant_C.imag() << "i" << std::endl;
+//     std::cout << constant_D.real() << " + "<<constant_D.imag() << "i" << std::endl;
   }
   
   template <int dim>
@@ -176,7 +176,7 @@ namespace backgroundField
 //       theta = atan2(p(1),hypot(p(0),p(2)));
       phi = atan2(p(1),p(0)); // TODO
       
-      if (r < 1e-4)
+      if (r < 1e-15)
       {
         factor=0.0;
         value_list[k]=0;
@@ -235,23 +235,30 @@ namespace backgroundField
 //       theta = atan2(p(1),hypot(p(0),p(2)));
       phi = atan2(p(1),p(0)); // TODO
       
-      if (r < 1e-4)
+      
+      
+      if (r < 1e-15)
       {
         value_list[k]=0;
       }        
-      else if (r < sphere_radius)
+      else if (r - sphere_radius <= 0)
       {
         std::complex<double> temp(0, constant_p);
-        std::complex<double> sqrt_ip = sqrt(temp);
-        std::complex<double> v=sqrt(temp)*r;
-        std::complex<double> bessel3halfs_plus = sqrt(2.0/(numbers::PI*v))*(cosh(v) - (1.0/v)*sinh(v));
-        std::complex<double> besselhalf_plus = temp*sinh(v);
+        const std::complex<double> sqrt_ip = sqrt(temp);
+        const std::complex<double> v = sqrt_ip*r;
+        
+        // Calculate the required bessel function values:
+        temp = sqrt(2.0/(numbers::PI*v));
+        const std::complex<double> bessel3halfs_plus = temp*(cosh(v) - (1.0/v)*sinh(v));
+        const std::complex<double> bessel5halfs_plus = temp*( (1.0 + 3.0/(v*v))*sinh(v) - (3.0/v)*cosh(v));
+        const std::complex<double> besselhalf_plus = temp*sinh(v);
         
         std::complex<double> factor_r
-        = (1/sqrt(r*r*r))*constant_B_magnitude*constant_C*bessel3halfs_plus*cos(theta);
+        = (1.0/sqrt(r*r*r))*constant_B_magnitude*constant_C*bessel3halfs_plus*cos(theta);
+        
         std::complex<double> factor_theta
-        = -constant_B_magnitude*constant_C*sin(theta)/(4.0*r)
-        *( (1/sqrt(r) + sqrt_ip )*bessel3halfs_plus + sqrt_ip*besselhalf_plus );
+        = -(constant_B_magnitude*constant_C*sin(theta))
+        *( bessel3halfs_plus/sqrt(r) + sqrt(r)*sqrt_ip*( besselhalf_plus + bessel5halfs_plus ) )/(4.0*r);
           
           // Convert to cartesian:
         std::complex<double> factor_x = factor_r*sin(theta)*cos(phi) + factor_theta*cos(theta)*cos(phi);
@@ -290,6 +297,9 @@ namespace backgroundField
     // Returns the value of the perturbed field:
     // H_{p} = H - H_{0}
     //
+    // In general, this is only valid outside of the object, so return 0
+    // for any position within the object.
+    //
     // TODO: Assume that the centre of the object is (0,0,0) for now
     
     Assert(value_list.size() == points.size(), ExcDimensionMismatch(value_list.size(), points.size()));
@@ -311,6 +321,7 @@ namespace backgroundField
       {
         for (unsigned int i=0; i<dim; ++i)
         {
+          // TODO: add the formula for the inside of the sphere.
           value_list[k](i) = 0.0;
           value_list[k](i+dim) = 0.0;
         }
@@ -602,9 +613,9 @@ namespace backgroundField
         value_list[i](0) = p(0)*p(0);
         value_list[i](1) = p(1)*p(1);
         value_list[i](2) = p(2)*p(2);
-        value_list[i](3) = 0.0;//p(0)*p(0);
-        value_list[i](4) = 0.0;//p(1)*p(1);
-        value_list[i](5) = 0.0;//p(2)*p(2);
+        value_list[i](3) = p(0)*p(0);
+        value_list[i](4) = p(1)*p(1);
+        value_list[i](5) = p(2)*p(2);
       }
   }
   template <int dim>

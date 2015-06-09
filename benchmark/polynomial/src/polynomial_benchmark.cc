@@ -16,6 +16,8 @@
 #include <myvectortools.h>
 #include <outputtools.h>
 
+#include <myfe_nedelec.h>
+
 using namespace dealii;
 
 namespace polynomialBenchmark
@@ -44,7 +46,7 @@ namespace polynomialBenchmark
   polynomialBenchmark<dim>::polynomialBenchmark(const unsigned int order)
   :
   tria (Triangulation<3>::MeshSmoothing::none, true),
-  fe (FE_Nedelec<dim>(order), 2),
+  fe (MyFE_Nedelec<dim>(order), 2),
   dof_handler (tria),
   p_order(order)
   {
@@ -85,7 +87,7 @@ namespace polynomialBenchmark
     // Can also perform mesh refinement here.
     // Also need to add material_ids.
     
-    typename Triangulation<dim>::active_cell_iterator
+    typename Triangulation<dim>::cell_iterator
     cell = tria.begin (),
     endc = tria.end ();
     
@@ -105,7 +107,7 @@ namespace polynomialBenchmark
         {
           if (cell->face(face)->at_boundary())
           {
-            cell->face(face)->set_all_boundary_indicators (10);
+            cell->face(face)->set_all_boundary_ids (10);
           }
         }
       }
@@ -149,7 +151,8 @@ namespace polynomialBenchmark
         GridGenerator::cylinder (tria, MeshData::radius, MeshData::height);
         static const CylinderBoundary<dim> cyl_boundary (MeshData::radius);
         tria.set_boundary (0, cyl_boundary);
-        tria.refine_global(1);
+//         tria.refine_global(1);
+        GridTools::distort_random (0.2, tria, true);
       }
       else if (MeshData::boundary_shape == "sphere")
       {
@@ -159,7 +162,7 @@ namespace polynomialBenchmark
         tria.refine_global(1);
       }
     }
-    //return;
+
     process_mesh(true);
     
     // Set boundary condition. This also doubles as the RHS function (J = A).

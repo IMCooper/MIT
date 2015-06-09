@@ -25,7 +25,7 @@ namespace InputTools
     ++cell)
     {
       cell->set_material_id(cell->material_id()-1);
-    }  
+    }
   }
   // Template instantiation
   template void read_in_mesh<3>(std::string,
@@ -337,8 +337,8 @@ namespace InputTools
     MeshData::zmax = prm.get_double("zmax");
     MeshData::zmin = prm.get_double("zmin");
       
-    MeshData::height = prm.get_double("radius");
-    MeshData::radius = prm.get_double("height");
+    MeshData::radius = prm.get_double("radius");
+    MeshData::height = prm.get_double("height");
     get_vector_from_list("centre", temp_vector1, 3);
     for (unsigned int d=0; d<3; ++d)
     {

@@ -8,7 +8,7 @@ mesh/
 *.ucd
 
 # results folder
-#results/
+results/
 
 # Mac OS specific:
 .DS_Store
@@ -28,6 +28,7 @@ install_manifest.txt
 
 # Build dir:
 build*/
+*build*/
 
 # Compiled Object files
 *.slo

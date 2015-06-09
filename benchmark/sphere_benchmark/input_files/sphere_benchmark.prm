@@ -3,8 +3,11 @@
 
 subsection Mesh Data
 
+  # Use an external mesh file (specified by mesh file)
+  set external mesh = false 
+
   # Name of the output file (without extension)
-  set Mesh file = ../mesh/sphere_benchmark4.ucd
+  set mesh file = ../mesh/cubittest.ucd
     
   # Type of boundary (cube/cylinder_z)
   set boundary shape = cube
@@ -12,12 +15,26 @@ subsection Mesh Data
   # Maximum value of x
   set xmax = 1.0
   
+  # Minimum value of x
+  set xmin = -1.0
+  
   # Maximum value of y
   set ymax = 1.0
   
+  # Minimum value of y
+  set ymin = -1.0
+  
   # Maximum value of z
   set zmax = 1.0
-
+  
+  # Minimum value of z
+  set zmin = -1.0
+  
+  # Radius of mesh (if applicable)
+  set radius = 0.5
+  
+  # Height of mesh (if applicable)
+  set height = 1.0
 end
 
 
@@ -38,7 +55,7 @@ subsection Material Parameters
   set omega = 3.141592653589793e+02
   
   # Regularisation Parameter
-  set regularisation parameter = 1e-6
+  set regularisation parameter = 1e-4
 
   # Background permittivity
   set background epsilon = 0.0

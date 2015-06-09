@@ -16,8 +16,11 @@
 #include <myvectortools.h>
 #include <outputtools.h>
 
+
 #include <Timer.h>
 #include <Config.h>
+#include <myfe_nedelec.h>
+
 
 using namespace dealii;
 
@@ -46,7 +49,7 @@ namespace wavepropBenchmark
   template <int dim>
   wavepropBenchmark<dim>::wavepropBenchmark(const unsigned int order, imc::Config* aConfig)
   :
-  fe (FE_Nedelec<dim>(order), 2),
+  fe (MyFE_Nedelec<dim>(order), 2),
   dof_handler (tria),
   p_order(order),
   config(aConfig)
@@ -102,7 +105,7 @@ namespace wavepropBenchmark
     // Set boundaries to neumann (boundary_id = 10)
     if (neumann_flag)
     {
-      typename Triangulation<dim>::active_cell_iterator
+      typename Triangulation<dim>::cell_iterator
       cell = tria.begin (),
       endc = tria.end();
       for (; cell!=endc; ++cell)
@@ -111,7 +114,23 @@ namespace wavepropBenchmark
         {
           if (cell->face(face)->at_boundary())
           {
-            cell->face(face)->set_boundary_indicator (10);
+            cell->face(face)->set_boundary_id (10);
+          }
+        }
+      }
+    }
+    else // Dirichlet
+    {
+      typename Triangulation<dim>::cell_iterator
+      cell = tria.begin (),
+      endc = tria.end();
+      for (; cell!=endc; ++cell)
+      {
+        for (unsigned int face=0; face<GeometryInfo<dim>::faces_per_cell; ++face)
+        {
+          if (cell->face(face)->at_boundary())
+          {
+            cell->face(face)->set_boundary_id (0);
           }
         }
       }
@@ -133,7 +152,7 @@ namespace wavepropBenchmark
   }
   template <int dim>
   void wavepropBenchmark<dim>::run(std::string input_filename, 
-                                 std::string output_filename)
+                                   std::string output_filename)
   {
     std::vector<imc::Timer> timers;  
     std::string timerName ="cycle 1";
@@ -142,19 +161,50 @@ namespace wavepropBenchmark
     ParameterHandler prm;
     InputTools::ParameterReader param(prm);
     param.read_and_copy_parameters(input_filename);
+    // Allow for choice of mesh completely by input file:
+    if (MeshData::external_mesh)
+    {
+      InputTools::read_in_mesh<dim>(MeshData::mesh_filename,
+                                    tria);
+      // TODO:
+//       if (MeshData::h_refinement > 0)
+//       tria.refine_global(MeshData::h_refinement);
+      if (MeshData::boundary_shape == "cube_distorted")
+      {
+        GridTools::distort_random (0.2, tria, false);  
+      }
+    }
+    else
+    {
+      if (MeshData::boundary_shape == "cube" || MeshData::boundary_shape == "cube_distorted")
+      {
+        GridGenerator::hyper_cube (tria,
+                                   MeshData::xmin,
+                                   MeshData::xmax);
+        tria.refine_global (1);
+        if (MeshData::boundary_shape == "cube_distorted")
+        {
+          GridTools::distort_random (0.2, tria, false);
+        }
+      }
+      else if (MeshData::boundary_shape == "cylinder")
+      {
+        GridGenerator::cylinder (tria, MeshData::radius, MeshData::height);
+        static const CylinderBoundary<dim> cyl_boundary (MeshData::radius);
+        tria.set_manifold (0, cyl_boundary);
+//         tria.refine_global(1);
+        GridTools::distort_random (0.2, tria, true);
+      }
+      else if (MeshData::boundary_shape == "sphere")
+      {
+        GridGenerator::hyper_ball (tria, Point<dim> (0.0,0.0,0.0), MeshData::radius);
+        static const HyperBallBoundary<dim> sph_boundary (Point<dim> (0.0,0.0,0.0), MeshData::radius);
+        tria.set_manifold (0, sph_boundary);
+        tria.refine_global(1);
+      }
+    }
     
-
-    /*
-    InputTools::read_in_mesh<dim>(IO_Data::mesh_filename,
-                                  tria);
-                                  */
-
-    
-    GridGenerator::hyper_cube (tria, -0.0125, 0.0125);
-    tria.refine_global (2);
-    GridTools::distort_random (0.2, tria, false);
-    
-    process_mesh(false);
+    process_mesh(true);
     
     // construct RHS for this field:
     Vector<double> p_wave(dim);
@@ -244,7 +294,8 @@ timer.point("init_solve");
                       boundary_conditions);
     
     // solve system & storage in the vector of solutions:
-    eddy.solve(solution);
+    unsigned int n_gmres_iterations;
+    eddy.solve(solution, n_gmres_iterations);
 timer.point("solve");
     std::cout << "Computed solution. " << std::endl;
 timer.end();

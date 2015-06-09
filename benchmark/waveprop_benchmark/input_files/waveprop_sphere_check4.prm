@@ -4,7 +4,7 @@
 subsection Mesh Data
 
   # Name of the output file (without extension)
-  set Mesh file = ../mesh/sphere_benchmark4.ucd
+  set mesh file = ../mesh/sphere_benchmark4.ucd
 
 end
 

@@ -5,6 +5,8 @@
 #include <deal.II/grid/tria_iterator.h>
 #include <deal.II/grid/tria_boundary_lib.h>
 
+#include <deal.II/grid/manifold_lib.h>
+
 #include <all_data.h>
 #include <backgroundfield.h>
 #include <curlfunction.h>
@@ -15,6 +17,8 @@
 #include <myvectortools.h>
 #include <outputtools.h>
 
+#include <myfe_nedelec.h>
+
 using namespace dealii;
 
 namespace sphereBenchmark
@@ -24,7 +28,8 @@ namespace sphereBenchmark
   class sphereBenchmark
   {
   public:
-    sphereBenchmark (const unsigned int order);
+    sphereBenchmark (const unsigned int poly_order,
+                     const unsigned int mapping_order = 2);
     ~sphereBenchmark ();
     void run(std::string input_filename,
              std::string output_filename);
@@ -33,18 +38,21 @@ namespace sphereBenchmark
     FESystem<dim> fe;
     DoFHandler<dim> dof_handler;
 
-    unsigned int p_order;
+    const unsigned int poly_order;
+    const unsigned int mapping_order;
     
     void initialise_materials();
     void process_mesh(bool neuman_flag);
   };
   
   template <int dim>
-  sphereBenchmark<dim>::sphereBenchmark(const unsigned int order)
+  sphereBenchmark<dim>::sphereBenchmark(const unsigned int poly_order,
+                                        const unsigned int mapping_order)
   :
-  fe (FE_Nedelec<dim>(order), 2),
+  fe (MyFE_Nedelec<dim>(poly_order), 2),
   dof_handler (tria),
-  p_order(order)
+  poly_order(poly_order),
+  mapping_order(mapping_order)
   {
   }
   
@@ -94,6 +102,50 @@ namespace sphereBenchmark
   void sphereBenchmark<dim>::process_mesh(bool neumann_flag)
   {
     // Routine to process the read in mesh
+    typename Triangulation<dim>::cell_iterator cell;
+    const typename Triangulation<dim>::cell_iterator endc = tria.end();
+    
+    // Move any vertices by a small amount if they lie on the central point.
+    // This is done to avoid the singular point in the solution which
+    // lies at (0,0,0).
+    cell = tria.begin ();
+    for (; cell!=endc; ++cell)
+    {
+      for (unsigned int i=0; i<GeometryInfo<dim>::vertices_per_cell; ++i)
+      {
+        if (sqrt(cell->vertex(i).square()) < 1e-10)
+        {
+          cell->vertex(i) += Point<dim> (1e-3,1e-3,1e-3);
+        }
+      }
+    }
+    
+    // Make the interior sphere's boundary a spherical boundary:    
+    // First set all manifold_ids to 0 (default).
+    cell = tria.begin ();
+    for (; cell!=endc; ++cell)
+    {
+      cell->set_all_manifold_ids(numbers::invalid_manifold_id);
+    }
+    // Now find those on the surface of the sphere.
+    // Do this by looking through all cells with material_id
+    // of the conductor, then finding any faces of those cells which
+    // are shared with a cell with material_id of the non-conductor.
+    cell = tria.begin ();
+    for (; cell!=endc; ++cell)
+    {
+      if (cell->material_id() == 1)
+      {
+        for (unsigned int face=0; face<GeometryInfo<dim>::faces_per_cell; ++face)
+        {
+          if (cell->neighbor(face)->material_id() == 0)
+          {
+            cell->face(face)->set_all_manifold_ids(100);
+          }
+        }
+      }
+    }
+    
     // Here we set the boundary ids for the boundary conditions
     // and may choose to mark the boundary as curved, etc.
     // Can also perform mesh refinement here.
@@ -101,34 +153,29 @@ namespace sphereBenchmark
     // Set boundaries to neumann (boundary_id = 10)
     if (neumann_flag)
     {
-      typename Triangulation<dim>::active_cell_iterator
-      cell = tria.begin (),
-      endc = tria.end();
+      cell = tria.begin ();
       for (; cell!=endc; ++cell)
       {
         for (unsigned int face=0; face<GeometryInfo<dim>::faces_per_cell; ++face)
         {
           if (cell->face(face)->at_boundary())
           {
-            cell->face(face)->set_boundary_indicator (10);
+            cell->face(face)->set_boundary_id (10);
           }
         }
       }
     }
-    
 
     // Now refine the outer mesh
-    /*
-    cell = tria.begin_active();
-    for (; cell!=endc; ++cell)
-    {
-//       if (cell->material_id() == 0)
-//       {
-        cell->set_refine_flag();
-//       }                         
-    }
-    tria.execute_coarsening_and_refinement ();    
-    */
+//     cell = tria.begin_active();
+//     for (; cell!=endc; ++cell)
+//     {
+// //       if (cell->material_id() == 0)
+// //       {
+//         cell->set_refine_flag();
+// //       }
+//     }
+//     tria.execute_coarsening_and_refinement ();
   }
   template <int dim>
   void sphereBenchmark<dim>::run(std::string input_filename, 
@@ -143,8 +190,13 @@ namespace sphereBenchmark
                                   tria);
     
     process_mesh(false);
-    initialise_materials();
+    // Set the marked boundary to be spherical:
+//     static const HyperBallBoundary<dim> sph_boundary (Point<dim> (0.0,0.0,0.0), 0.5);
+    static const SphericalManifold<dim> sph_boundary;
+    tria.set_manifold (100, sph_boundary);
+//     tria.refine_global(2);
     
+    initialise_materials();
     // TESTING
     // Check polar coords:
 //     {
@@ -179,33 +231,34 @@ namespace sphereBenchmark
     
     
     
-    std::cout << "Number of active cells:       "
+    deallog << "Number of active cells:       "
     << tria.n_active_cells()
     << std::endl;
     
     // Now setup the forward problem:
     dof_handler.distribute_dofs (fe);
-    ForwardSolver::EddyCurrent<dim, DoFHandler<dim>> eddy(dof_handler,
+    
+    const MappingQ<dim> mapping(mapping_order, (mapping_order>1 ? true : false));
+
+//     const MappingQ1<dim> mapping;
+    ForwardSolver::EddyCurrent<dim, DoFHandler<dim>> eddy(mapping,
+                                                          dof_handler,
                                                           fe,
                                                           PreconditionerData::use_direct);
     
-    std::cout << "Number of degrees of freedom: "
+    deallog << "Number of degrees of freedom: "
     << dof_handler.n_dofs()
     << std::endl;
     
     // assemble the matrix for the eddy current problem:
-    std::cout << "Assembling System Matrix...." << std::endl;
+    deallog << "Assembling System Matrix...." << std::endl;
     eddy.assemble_matrices(dof_handler);
-    std::cout << "Matrix Assembly complete. " << std::endl;
+    deallog << "Matrix Assembly complete. " << std::endl;
     
     // initialise the linear solver - precomputes any inverses for the preconditioner, etc:
-    std::cout << "Initialising Solver..." << std::endl;
+    deallog << "Initialising Solver..." << std::endl;
     eddy.initialise_solver();
-    std::cout << "Solver initialisation complete. " << std::endl;
-
-    // Now solve for each excitation coil:
-    std::cout << "Solving... " << std::endl;
-    Vector<double> solution;
+    deallog << "Solver initialisation complete. " << std::endl;
     
     // construct RHS for this field:
     Vector<double> uniform_field(dim+dim);
@@ -231,28 +284,47 @@ namespace sphereBenchmark
     */
     
     // assemble rhs
+    deallog << "Assembling System RHS...." << std::endl;
     eddy.assemble_rhs(dof_handler,
                       boundary_conditions);
+    deallog << "Matrix RHS complete. " << std::endl;
     
+    deallog << "Solving... " << std::endl;
+    Vector<double> solution;
     // solve system & storage in the vector of solutions:
-    eddy.solve(solution);
+    unsigned int n_gmres_iterations;
+    eddy.solve(solution,n_gmres_iterations);
 
-    std::cout << "Computed solution. " << std::endl;
+    deallog << "Computed solution. " << std::endl;
     
     // Output error to screen:
-    double hcurlerr = MyVectorTools::calcErrorHcurlNorm(dof_handler,
+    Vector<double> diff_per_cell(tria.n_active_cells());
+    VectorTools::integrate_difference(mapping, dof_handler, solution, boundary_conditions,
+                                      diff_per_cell, QGauss<dim>(2*(poly_order+1)+2), VectorTools::L2_norm);
+    const double l2err = diff_per_cell.l2_norm();
+    const double hcurlerr = MyVectorTools::calcErrorHcurlNorm(mapping,
+                                                        dof_handler,
                                                         solution,
                                                         boundary_conditions);
-    std::cout << "HCurl Error: " << hcurlerr << std::endl;
+    deallog << "L2 Error: " << l2err << std::endl;
+    deallog << "HCurl Error: " << hcurlerr << std::endl;
+    // Short version:
+    std::cout << tria.n_active_cells()
+    << " " << dof_handler.n_dofs()
+    << " " << n_gmres_iterations
+    << " " << l2err
+    << " " << hcurlerr
+    << std::endl;
     
-//     {
-//       std::ostringstream tmp;
-//       tmp << output_filename;    
-//       OutputTools::output_to_vtk<dim, DoFHandler<dim>>(dof_handler,
-//                                                        solution,
-//                                                        tmp.str(),
-//                                                        boundary_conditions);
-//     }
+    {
+      std::ostringstream tmp;
+      tmp << output_filename;    
+      OutputTools::output_to_vtk<dim, DoFHandler<dim>>(mapping,
+                                                       dof_handler,
+                                                       solution,
+                                                       tmp.str(),
+                                                       boundary_conditions);
+    }
     
     // Output the solution fields along a line to a text file:
     Point <dim> xaxis;
@@ -278,18 +350,20 @@ namespace sphereBenchmark
     std::stringstream tmp;
     tmp << output_filename << "_xaxis";
     std::string xaxis_str = tmp.str();
-    OutputTools::output_radial_values<dim> (dof_handler,
-                                       solution,
-                                       boundary_conditions,
-                                       uniform_field,
-                                       xaxis,
-                                       xaxis_str);
+    OutputTools::output_radial_values<dim> (mapping,
+                                            dof_handler,
+                                            solution,
+                                            boundary_conditions,
+                                            uniform_field,
+                                            xaxis,
+                                            xaxis_str);
     }
     {
       std::stringstream tmp;
       tmp << output_filename << "_yaxis";
       std::string yaxis_str = tmp.str();
-      OutputTools::output_radial_values<dim> (dof_handler,
+      OutputTools::output_radial_values<dim> (mapping,
+                                              dof_handler,
                                               solution,
                                               boundary_conditions,
                                               uniform_field,
@@ -300,18 +374,20 @@ namespace sphereBenchmark
       std::stringstream tmp;
       tmp << output_filename << "_zaxis";
       std::string zaxis_str = tmp.str();
-      OutputTools::output_radial_values<dim> (dof_handler,
-                                       solution,
-                                       boundary_conditions,
-                                       uniform_field,
-                                       zaxis,
-                                       zaxis_str);
+      OutputTools::output_radial_values<dim> (mapping,
+                                              dof_handler,
+                                              solution,
+                                              boundary_conditions,
+                                              uniform_field,
+                                              zaxis,
+                                              zaxis_str);
     }
     {
       std::stringstream tmp;
       tmp << output_filename << "_diagaxis";
       std::string diagaxis_str = tmp.str();
-      OutputTools::output_radial_values<dim> (dof_handler,
+      OutputTools::output_radial_values<dim> (mapping,
+                                              dof_handler,
                                               solution,
                                               boundary_conditions,
                                               uniform_field,
@@ -375,7 +451,7 @@ namespace sphereBenchmark
       
       // output to file:
       std::ostringstream tmp;
-      tmp << output_filename << "_ptfield_p" << p_order << ".out";
+      tmp << output_filename << "_ptfield_p" << poly_order << ".out";
       std::ofstream file(tmp.str());
       file.precision(32);
       for (unsigned int i=0; i<measurement_points.size(); ++i)
@@ -429,7 +505,8 @@ int main (int argc, char* argv[])
   unsigned int dim = 3;
   // Set default input:
   unsigned int p_order = 0;
-  std::string output_filename = "cube";
+  unsigned int mapping_order = 1;
+  std::string output_filename = "sphere";
   std::string input_filename = "../input_files/sphere_benchmark.prm";
   
   // Allow for input from command line:
@@ -445,6 +522,17 @@ int main (int argc, char* argv[])
           std::stringstream strValue;
           strValue << argv[i+1];
           strValue >> p_order;
+        }
+        if (input == "-m")
+        {
+          std::stringstream strValue;
+          strValue << argv[i+1];
+          strValue >> mapping_order;
+          if (mapping_order < 1)
+          {
+            std::cout << "ERROR: mapping order must be > 0" << std::endl;
+            return 1;
+          }
         }
         if (input == "-i")
         {
@@ -465,7 +553,8 @@ int main (int argc, char* argv[])
   std::ofstream deallog_file(deallog_filename.str());
   deallog.attach(deallog_file);
   
-  sphereBenchmark::sphereBenchmark<3> eddy_voltages(p_order);
+  sphereBenchmark::sphereBenchmark<3> eddy_voltages(p_order,
+                                                    mapping_order);
   eddy_voltages.run(input_filename,
                     output_filename);
   

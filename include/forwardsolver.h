@@ -12,6 +12,9 @@
 #include <deal.II/fe/fe_nedelec.h>
 #include <deal.II/fe/fe_system.h>
 #include <deal.II/fe/fe_values.h>
+#include <deal.II/fe/mapping_q.h>
+#include <deal.II/fe/mapping_q1.h>
+#include <deal.II/fe/mapping.h>
 
 #include <deal.II/hp/dof_handler.h>
 
@@ -41,7 +44,8 @@
 #include <mypreconditioner.h>
 
 #include <omp.h>
-
+#include <Config.h>
+#include <Timer.h>
 using namespace dealii;
 
 #ifndef FORWARDSOLVER_H
@@ -96,9 +100,15 @@ namespace ForwardSolver
     // - a solution vector for the coeffs of the FE solution of the PDE
   public:
     EddyCurrent (DH &dof_handler,
-                 const FiniteElement<dim> &fe,                 
-//                  const curlFunction<dim> &boundary_function, //Check if we can remove
-                 const bool direct_solver_flag = false);
+                 const FiniteElement<dim> &fe,
+                 imc::Config* aConfig, 
+                 const bool direct_flag = false);
+    EddyCurrent (const Mapping<dim,dim> &mapping_in,
+                 DH &dof_handler,
+                 const FiniteElement<dim> &fe,
+                 imc::Config* aConfig, 
+                 const bool direct_flag = false);
+    
     ~EddyCurrent ();
     
     void assemble_matrices (const DH &dof_handler);
@@ -120,10 +130,14 @@ namespace ForwardSolver
                        const Function<dim> &rhs_function);
     
     void initialise_solver();
-    void solve (Vector<double> &output_solution);
+    void solve (Vector<double> &output_solution,
+                unsigned int &n_iterations);
     
     
   private:
+    void constructor_setup(DH &dof_handler,
+                           const bool direct_flag);
+    
     void compute_constraints (const DH &dof_handler,
                               const curlFunction<dim> &boundary_function);
     
@@ -132,6 +146,10 @@ namespace ForwardSolver
     unsigned int p_order;
     unsigned int quad_order;
     
+    imc::Config* config;    
+
+    // Mapping storage:
+    SmartPointer< const Mapping<dim> > mapping;
     
     // Block sparse storage:
     BlockSparsityPattern sparsity_pattern;
@@ -139,13 +157,23 @@ namespace ForwardSolver
     BlockVector<double> solution;
     BlockVector<double> system_rhs;
     
-    // Preconditioner:
-    // low order only:
-    SmartPointer<Preconditioner::EddyCurrentPreconditioner_low_order> preconditioner_low_order;
-    // both high and low order:
-    SmartPointer<Preconditioner::EddyCurrentPreconditioner> preconditioner;
-    BlockSparseMatrix<double> system_preconditioner;
+    // Dof ordering storage:
+    unsigned int n_lowest_order_dofs;
+    unsigned int n_higher_order_dofs;
     
+    unsigned int n_higher_order_edge_gradients_dofs;
+    unsigned int n_higher_order_face_gradients_dofs;
+    unsigned int n_higher_order_cell_gradients_dofs;
+    unsigned int n_higher_order_face_nongradients_dofs;
+    unsigned int n_higher_order_cell_nongradients_dofs;
+    
+    unsigned int n_higher_order_gradient_dofs;
+    unsigned int n_higher_order_non_gradient_dofs;
+    
+    // Preconditioner:
+    BlockSparseMatrix<double> system_preconditioner;
+    // TODO: would this be better as SmartPointer<Preconditioner::EddyCurrentPreconditionerBase> preconditioner; ??
+    Preconditioner::EddyCurrentPreconditionerBase* preconditioner;
     
     // Constraints:
     ConstraintMatrix constraints;
@@ -155,7 +183,11 @@ namespace ForwardSolver
     bool direct = false;
     SparseDirectUMFPACK direct_solve;
     
-  // protected: // removed, used to contain smart pointer for fe.
+    unsigned int omp_threads;
+    unsigned int omp_chunkSize;
+    unsigned int omp_collapseLoops;
+  
+    // protected: // removed, used to contain smart pointer for fe.
   };  
 }
 #endif

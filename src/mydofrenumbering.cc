@@ -22,6 +22,9 @@ namespace MyDoFRenumbering
       // Loop through each base element and each multiplicity and grab the system index of each.
       // Can then compare this index to where we know the lowest order DoF is and reorder. 
       
+      // TODO: For now this is only designed to work in 3D, so throw an exception in 2D:
+      Assert (dim == 3, ExcNotImplemented ());
+      
       const FiniteElement<dim> &fe = dof_handler.get_fe ();
       const unsigned int superdegree = fe.degree;
       const unsigned int degree = superdegree - 1;
@@ -33,11 +36,11 @@ namespace MyDoFRenumbering
       const unsigned int dofs_per_quad = fe.dofs_per_quad;
       const unsigned int dofs_per_hex = fe.dofs_per_hex;
       
+      const unsigned int dofs_per_face = fe.dofs_per_face; // this includes dofs on lines and faces together.
       const unsigned int dofs_per_cell = fe.dofs_per_cell;
       
       const unsigned int line_dofs_per_cell = lines_per_cell*dofs_per_line;
       const unsigned int face_dofs_per_cell = faces_per_cell*dofs_per_quad;
-      
       
       std::vector<bool> global_dofs_seen (n_global_dofs);
       
@@ -104,44 +107,49 @@ namespace MyDoFRenumbering
        * 
        */
       
-      /*
-       * Temporary arrays to store each type of DoF 
-       * (lowest order and higher order edge/face/cell).
-       *
-       * Will combine these into the final reordering afterwards.
-       */
-      /* eventually want to have reorderings by both edge/face/cell and by polynomial degree within each:
-       * 
-       * std::vector<std::vector<types::global_dof_index>> edge_reorderings (superdegree, std::vector<types::global_dof_index> (n_global_dofs));
-       * std::vector<types::global_dof_index> edge_counts (superdegree);
-       * std::vector<std::vector<types::global_dof_index>> face_reorderings (superdegree, std::vector<types::global_dof_index> (n_global_dofs));
-       * std::vector<types::global_dof_index> face_counts (superdegree-1);
-       * std::vector<std::vector<types::global_dof_index>> cell_reorderings (superdegree, std::vector<types::global_dof_index> (n_global_dofs));
-       * std::vector<types::global_dof_index> cell_counts (superdegree-1);
-       */
-      std::vector<types::global_dof_index> lowest_order_renumbering(n_global_dofs);
-      std::vector<types::global_dof_index> higher_order_edge_renumbering(n_global_dofs);
-      std::vector<types::global_dof_index> higher_order_face_renumbering(n_global_dofs);
-      std::vector<types::global_dof_index> higher_order_cell_renumbering(n_global_dofs);
+      // Control for the number and types of block:
+      // Currently we have:
+      //       lower order
+      //       gradient-based (edge/face/cell subtypes)
+      //       non-gradient-based (face/cell subtypes) (NOTE: lack of edge-based non-gradients!).
+      //
+      // TODO: could provide an option to re-order this so we have:
+      //       lower order
+      //       edges (gradients subtype ONLY)
+      //       faces (gradients/non-gradients subtypes)
+      //       cells (gradients/non-gradients subtypes)
+      const unsigned int n_blocks(6);
+      const unsigned int lower_order_block(0);
+      const unsigned int higher_order_edge_gradient_block(1);
+      const unsigned int higher_order_face_gradient_block(2);
+      const unsigned int higher_order_cell_gradient_block(3);
+      const unsigned int higher_order_face_nongradient_block(4);
+      const unsigned int higher_order_cell_nongradient_block(5);
       
+      // Max local edge/face/cell numbering of a gradient-based DoF
+      // NOTE: for each edge/face/cell the gradient-based DoFs come first
+      // then the non-gradients (see new FE_Nedelec element).
+      // There are no non-gradients on edges, so we only need face & cell limits:
+      // TODO: this would change in 2D.
+      const unsigned int n_gradients_per_face(degree*degree);
+      const unsigned int n_gradients_per_cell(degree*degree*degree);
       
-      std::vector<bool> lowest_order_dof(n_global_dofs);
-      std::vector<bool> higher_order_edge_dof(n_global_dofs);
-      std::vector<bool> higher_order_face_dof(n_global_dofs);
-      std::vector<bool> higher_order_cell_dof(n_global_dofs);
+      std::vector<std::vector<types::global_dof_index> > all_renumberings(n_blocks,
+                                                                         std::vector<types::global_dof_index> (n_global_dofs));
       
-      for (unsigned int dof = 0; dof < n_global_dofs; ++dof)
+      std::vector<std::vector<bool> > all_reordered_dofs(n_blocks,
+                                              std::vector<bool> (n_global_dofs));
+      
+      std::vector<types::global_dof_index> all_dof_counts(n_blocks);
+      
+      for (unsigned int b=0; b<n_blocks; ++b)
       {
-        lowest_order_dof[dof] = false;
-        higher_order_edge_dof[dof] = false;
-        higher_order_face_dof[dof] = false;
-        higher_order_cell_dof[dof] = false;
+        all_dof_counts[b] = 0;
+        for (unsigned int dof=0; dof<n_global_dofs; ++dof)
+        {
+          all_reordered_dofs[b][dof] = false;
+        }
       }
-      
-      types::global_dof_index lowest_order_dof_count = 0;
-      types::global_dof_index higher_order_edge_dof_count = 0;
-      types::global_dof_index higher_order_face_dof_count = 0;
-      types::global_dof_index higher_order_cell_dof_count = 0;
       
       for (unsigned int base_element = 0; base_element < fe.n_base_elements (); ++base_element)
       {
@@ -168,38 +176,36 @@ namespace MyDoFRenumbering
              */
             for (unsigned int local_dof = 0; local_dof < line_dofs_per_cell; ++local_dof)
             {
-              // Lowest order:
+              // Lowest order part:
               if ( (fe.system_to_base_index(local_dof).first == base_indices)
-                && (fe.system_to_base_index(local_dof).second % superdegree == 0)
+                && (fe.system_to_base_index(local_dof).second % fe.base_element(base_element).dofs_per_line == 0)
                 && ( !local_dofs_seen[local_dof] )
                 && ( !global_dofs_seen[local_dof_indices[local_dof]] ) )
               {
                 local_dofs_seen[local_dof] = true;
                 global_dofs_seen[local_dof_indices[local_dof]] = true;
-                lowest_order_renumbering[local_dof_indices[local_dof]] = lowest_order_dof_count;
-                lowest_order_dof[local_dof_indices[local_dof]] = true;
-                ++lowest_order_dof_count;               
+                all_renumberings[lower_order_block][local_dof_indices[local_dof]]
+                 = all_dof_counts[lower_order_block];
+                all_reordered_dofs[lower_order_block][local_dof_indices[local_dof]] = true;
+                ++all_dof_counts[lower_order_block];
               }
               else if ( (fe.system_to_base_index(local_dof).first == base_indices)
-                && (fe.system_to_base_index(local_dof).second % superdegree > 0)
+                && (fe.system_to_base_index(local_dof).second % fe.base_element(base_element).dofs_per_line > 0)
                 && ( !local_dofs_seen[local_dof] )
                 && ( !global_dofs_seen[local_dof_indices[local_dof]] ) )
               {
                 local_dofs_seen[local_dof] = true;
                 global_dofs_seen[local_dof_indices[local_dof]] = true;
-                higher_order_edge_renumbering[local_dof_indices[local_dof]] = higher_order_edge_dof_count;
-                higher_order_edge_dof[local_dof_indices[local_dof]] = true;
-                ++higher_order_edge_dof_count;
+                // Gradient-based edges. NOTE: There are no non-gradient edge-based DoFs.
+                all_renumberings[higher_order_edge_gradient_block][local_dof_indices[local_dof]]
+                 = all_dof_counts[higher_order_edge_gradient_block];
+                all_reordered_dofs[higher_order_edge_gradient_block][local_dof_indices[local_dof]] = true;
+                ++all_dof_counts[higher_order_edge_gradient_block];
               }
             }
-            /* 
-             * Loop over all face DoFs, skipping the edge DoFs, stopping
-             * before we reach the interior cell DoFs.
-             * Since all face DoFs are already higher order, and for
-             * now we're not reordering by polynomial degree, there is no
-             * need to do much else.
-             * We simply group these DoFs using their common base element and copy.
-             */
+            // Loop over all face DoFs, skipping the edge DoFs, stopping
+            // before we reach the interior cell DoFs.
+            // The ordering of these local dofs is by face, then gradients first, followed by non-gradients.
             for (unsigned int local_dof = line_dofs_per_cell;
                  local_dof < line_dofs_per_cell + face_dofs_per_cell; ++local_dof)
             {
@@ -209,19 +215,31 @@ namespace MyDoFRenumbering
               {
                 local_dofs_seen[local_dof] = true;
                 global_dofs_seen[local_dof_indices[local_dof]] = true;
-                higher_order_face_renumbering[local_dof_indices[local_dof]] = higher_order_face_dof_count;
-                higher_order_face_dof[local_dof_indices[local_dof]] = true;
-                ++higher_order_face_dof_count;
+                // To decide if we have a gradient or non-gradient can use
+                // the base element's local dof mod dofs_per_face. (after being adjusted to ignore lines).
+                // Since gradients come first on each face:
+                // If this is between 0 and n_gradients_per_face => gradient,
+                //                                     otherwise => non-gradient.
+                if ( (fe.system_to_base_index(local_dof).second - lines_per_cell*fe.base_element(base_element).dofs_per_line)
+                     % fe.base_element(base_element).dofs_per_quad < n_gradients_per_face )
+                {
+                  all_renumberings[higher_order_face_gradient_block][local_dof_indices[local_dof]]
+                   = all_dof_counts[higher_order_face_gradient_block];
+                  all_reordered_dofs[higher_order_face_gradient_block][local_dof_indices[local_dof]] = true;
+                  ++all_dof_counts[higher_order_face_gradient_block];
+                }
+                else
+                {
+                  all_renumberings[higher_order_face_nongradient_block][local_dof_indices[local_dof]]
+                   = all_dof_counts[higher_order_face_nongradient_block];
+                  all_reordered_dofs[higher_order_face_nongradient_block][local_dof_indices[local_dof]] = true;
+                  ++all_dof_counts[higher_order_face_nongradient_block];
+                }
               }
             }
-            /*
-             * Loop over all cell DoFs, skipping the edge and face DoFs,
-             * stopping at the last local DoF
-             * Since all cell DoFs are already higher order, and for
-             * now we're not reordering by polynomial degree, there is no
-             * need to do much else.
-             * We simply group these DoFs using their common base element and copy.
-             */
+            // Loop over all cell DoFs, skipping the edge and face DoFs,
+            // stopping at the last local DoF
+            // The ordering of these local dofs is simply by gradients followed by non-gradients.
             for (unsigned int local_dof = line_dofs_per_cell + face_dofs_per_cell;
                  local_dof < dofs_per_cell; ++local_dof)
             {
@@ -231,66 +249,68 @@ namespace MyDoFRenumbering
               {
                 local_dofs_seen[local_dof] = true;
                 global_dofs_seen[local_dof_indices[local_dof]] = true;
-                higher_order_cell_renumbering[local_dof_indices[local_dof]] = higher_order_cell_dof_count;
-                higher_order_cell_dof[local_dof_indices[local_dof]] = true;
-                ++higher_order_cell_dof_count;
+                // To decide if we have a gradient or non-gradient, just check if the
+                // base element's local dof is less than n_gradients_per_cell.
+                // (after being shifted to only consider cell interiors).
+                if ( (fe.system_to_base_index(local_dof).second
+                      - lines_per_cell*fe.base_element(base_element).dofs_per_line
+                      - faces_per_cell*fe.base_element(base_element).dofs_per_quad) < n_gradients_per_cell )
+                {
+                  all_renumberings[higher_order_cell_gradient_block][local_dof_indices[local_dof]]
+                   = all_dof_counts[higher_order_cell_gradient_block];
+                  all_reordered_dofs[higher_order_cell_gradient_block][local_dof_indices[local_dof]] = true;
+                  ++all_dof_counts[higher_order_cell_gradient_block];
+                }
+                else
+                {
+                  all_renumberings[higher_order_cell_nongradient_block][local_dof_indices[local_dof]]
+                   = all_dof_counts[higher_order_cell_nongradient_block];
+                  all_reordered_dofs[higher_order_cell_nongradient_block][local_dof_indices[local_dof]] = true;
+                  ++all_dof_counts[higher_order_cell_nongradient_block];
+                }
               }
             }
           }
         }
       }
-      /* Fill the array with counts of each type of DoF */
-      dof_counts[0] = lowest_order_dof_count;
-      dof_counts[1] = higher_order_edge_dof_count;
-      dof_counts[2] = higher_order_face_dof_count;
-      dof_counts[3] = higher_order_cell_dof_count;
-      /* 
-       * Now have reordering for lowest and higher order (split into edges/face/cells) dofs.
-       * Now want to combine them into a single reordering in this order:
-       *  - lowest order first
-       *  - higher order edges
-       *  - higher order faces
-       *  - higher order cells
-       */
-      //    renumbering = lowest_order_renumbering;
-      // Higher order edges:
+      // Fill the array with counts of each type of DoF
+      dof_counts.resize(n_blocks);
+      for (unsigned int b=0; b<n_blocks; ++b)
+      {
+        dof_counts[b] = all_dof_counts[b];
+      }
+
+      // Now have reordering for lowest and higher order (split into gradients/non-gradients
+      // with edge/face/cell subtypes) dofs.
+      // Now want to combine them into a single reordering
       for (unsigned int dof = 0; dof < n_global_dofs; ++dof)
       {
-        if (lowest_order_dof[dof])
+        // Need to keep a track of the dof counts in blocks we've skipped
+        // and adjust the renumbering accordingly.
+        unsigned int block_increment = 0;
+        for (unsigned int b=0; b<n_blocks; ++b)
         {
-          renumbering[dof] = lowest_order_renumbering[dof];
-        }
-        else if (higher_order_edge_dof[dof])
-        {
-          renumbering[dof] = higher_order_edge_renumbering[dof]
-          + lowest_order_dof_count;
-        }
-        else if (higher_order_face_dof[dof])
-        {
-          renumbering[dof] = higher_order_face_renumbering[dof]
-          + lowest_order_dof_count
-          + higher_order_edge_dof_count;
-        }
-        else if (higher_order_cell_dof[dof])
-        {
-          renumbering[dof] = higher_order_cell_renumbering[dof]
-          + lowest_order_dof_count
-          + higher_order_edge_dof_count
-          + higher_order_face_dof_count;
+          if (all_reordered_dofs[b][dof])
+          {
+            renumbering[dof] = all_renumberings[b][dof] + block_increment;
+            break;
+          }
+          block_increment += all_dof_counts[b];
         }
       }
       /* Check if we've now reordered all DoFs */
-      unsigned int total_counted_dofs;
-      total_counted_dofs = lowest_order_dof_count
-      + higher_order_edge_dof_count
-      + higher_order_face_dof_count
-      + higher_order_cell_dof_count;
+      unsigned int total_counted_dofs=0;
+      for (unsigned int b=0; b<n_blocks; ++b)
+      {
+        total_counted_dofs += all_dof_counts[b];
+      }
+
       if (total_counted_dofs == n_global_dofs)
       {
         return total_counted_dofs;
       }
       // If not, then add remaining DoFs in the order they come:
-      //     std::cout << " DoFRenumbering::by_dimension: some DoFs still remain..." << std::endl;
+      std::cout << " DoFRenumbering::by_dimension: some DoFs still remain..." << std::endl;
       for (unsigned int dof = 0; dof < n_global_dofs; ++dof)
       {
         if (!global_dofs_seen[dof])

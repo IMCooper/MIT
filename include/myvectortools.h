@@ -36,6 +36,11 @@ namespace MyVectorTools
   double calcErrorHcurlNorm(const DH &dof_handler,
                             const Vector<double> &solution,
                             const curlFunction<dim> &exact_solution);
+  template<int dim, class DH>
+  double calcErrorHcurlNorm(const Mapping<dim> &mapping,
+                            const DH &dof_handler,
+                            const Vector<double> &solution,
+                            const curlFunction<dim> &exact_solution);
   
   // Functions to return the gradient values of an FE solution at a point:
   // Note: only works for FE_Nedelec elements with 2 vector valued blocks
@@ -45,12 +50,25 @@ namespace MyVectorTools
                       const Vector<double> &solution,
                       const Point<dim> &point,
                       std::vector<Tensor<1,dim>> &gradients);
+  template <int dim, class DH>
+  void point_gradient(const Mapping<dim> &mapping,
+                      const DH &dof_handler,
+                      const Vector<double> &solution,
+                      const Point<dim> &point,
+                      std::vector<Tensor<1,dim>> &gradients);
+  
   
   // Functions to return the curls of an FE solution at a point:
   // Note: only works for FE_Nedelec elements with 2 vector valued blocks
   //       which correspond to the real & imaginary part.
   template <int dim, class DH>
   void point_curl (const DH &dof_handler,
+                   const Vector<double> &solution,
+                   const Point<dim> &point,
+                   Vector<double> &curl);
+  template <int dim, class DH>
+  void point_curl (const Mapping<dim> &mapping,
+                   const DH &dof_handler,
                    const Vector<double> &solution,
                    const Point<dim> &point,
                    Vector<double> &curl);

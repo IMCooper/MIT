@@ -3,12 +3,14 @@
 ##
 
 set(TARGET waveprop_benchmark)
+set(IMC_LIB_SRC "/home/scmimc/MaxwellProbs/IMC_UTILS/imc/utils")
 set(MY_LIB_SRC "../../src")
+set(IMC_LIB_INC "/home/scmimc/MaxwellProbs/IMC_UTILS/imc/utils")
 set(MY_LIB_INC "../../include")
 
 #file(GLOB test_headers "include/*.h") # NOT NEEDED
 
-include_directories(${MY_LIB_INC})
+include_directories(${MY_LIB_INC} ${IMC_LIB_INC})
 # Method 1: use a global file pointing to a directory with
 # all source files contained within it:
 # Apparently not the correct way.
@@ -19,6 +21,8 @@ include_directories(${MY_LIB_INC})
 # This is apparently the "correct" way, but new
 # files must be added to this manualy.
 set(TARGET_SRC
+    ${IMC_LIB_SRC}/Config.cpp
+    ${IMC_LIB_SRC}/Timer.cpp
     ${MY_LIB_SRC}/all_data.cc
     ${MY_LIB_SRC}/backgroundfield.cc
     ${MY_LIB_SRC}/inputtools.cc
@@ -47,4 +51,5 @@ ENDIF()
 
 DEAL_II_INITIALIZE_CACHED_VARIABLES()
 PROJECT(${TARGET})
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fopenmp -std=c++11")
 DEAL_II_INVOKE_AUTOPILOT()

@@ -3,8 +3,38 @@
 
 subsection Mesh Data
 
+  # Use an external mesh file (specified by mesh file)
+  set external mesh = false 
+
   # Name of the output file (without extension)
-  set Mesh file = ../mesh/sphere_benchmark.ucd
+  set mesh file = unspecified
+  
+  # Type of boundary (cube/cylinder_z)
+  set boundary shape = cylinder
+  
+  # Maximum value of x
+  set xmax = 0.5
+  
+  # Minimum value of x
+  set xmin = 0.0
+  
+  # Maximum value of y
+  set ymax = 0.0
+  
+  # Minimum value of y
+  set ymin = 0.0
+  
+  # Maximum value of z
+  set zmax = 0.0
+  
+  # Minimum value of z
+  set zmin = 0.0
+  
+  # Radius of mesh (if applicable)
+  set radius = 0.5
+  
+  # Height of mesh (if applicable)
+  set height = 1.0
 
 end
 
@@ -12,7 +42,7 @@ end
 subsection Output Parameters
 
   # Name of the output file (without extension)
-  set Output filename = cube_solution
+  set Output filename = cyl
   
   # Output file extension
   set Output filetype = vtk
@@ -90,12 +120,12 @@ end
 subsection Preconditioner Data
 
   # Enable the sparse direct solver (disables the GMRES solver)
-  set use direct = true
+  set use direct = false
 
   # SparseILU diagonal strengthening
-  set diagonal strengthening = 1e6
+  set diagonal strengthening = 0.1
   
   # SparseILU extra off diagonals
-  set extra off diagonals = 0
+  set extra off diagonals = 100
 
 end
